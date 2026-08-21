@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 from app.database import engine
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.1.1")
+app = FastAPI(title="Enigma Core API", version="0.1.2")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -50,6 +50,14 @@ def health() -> dict:
 async def fixtures_today() -> dict:
     try:
         return await SportmonksClient().fixtures_by_date(date.today())
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Sportmonks request failed") from exc
+
+
+@app.get("/fixtures/date/{target_date}")
+async def fixtures_by_date(target_date: date) -> dict:
+    try:
+        return await SportmonksClient().fixtures_by_date(target_date)
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Sportmonks request failed") from exc
 
