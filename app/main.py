@@ -1,14 +1,15 @@
 from datetime import date
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from app.database import engine
 from app.ingestion import ingest_fixtures_payload
+from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.1.3")
+app = FastAPI(title="Enigma Core API", version="0.2.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -75,6 +76,27 @@ async def ingest_fixtures_by_date(target_date: date) -> dict:
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Fixture ingestion failed") from exc
+
+
+@app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
+async def ingest_prematch_odds(
+    sportmonks_fixture_id: int,
+    snapshot_window: str | None = Query(default=None, max_length=30),
+) -> dict:
+    try:
+        payload = await SportmonksClient().prematch_odds_by_fixture(sportmonks_fixture_id)
+        result = ingest_prematch_odds_payload(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            payload=payload,
+            snapshot_window=snapshot_window,
+        )
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Odds ingestion failed") from exc
 
 
 @app.get("/fixtures/{fixture_id}")
