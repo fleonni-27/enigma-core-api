@@ -5,9 +5,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from app.database import engine
+from app.ingestion import ingest_fixtures_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.1.2")
+app = FastAPI(title="Enigma Core API", version="0.1.3")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -60,6 +61,20 @@ async def fixtures_by_date(target_date: date) -> dict:
         return await SportmonksClient().fixtures_by_date(target_date)
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Sportmonks request failed") from exc
+
+
+@app.post("/ingest/fixtures/date/{target_date}")
+async def ingest_fixtures_by_date(target_date: date) -> dict:
+    try:
+        payload = await SportmonksClient().fixtures_by_date(target_date)
+        result = ingest_fixtures_payload(payload)
+        if result.get("status") != "ok":
+            raise HTTPException(status_code=500, detail=result)
+        return {"date": target_date.isoformat(), **result}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Fixture ingestion failed") from exc
 
 
 @app.get("/fixtures/{fixture_id}")
