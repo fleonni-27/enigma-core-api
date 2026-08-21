@@ -13,7 +13,6 @@ class Fixture(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     sportmonks_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
-    league_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     league_name: Mapped[str | None] = mapped_column(String(160))
     home_team: Mapped[str] = mapped_column(String(160))
     away_team: Mapped[str] = mapped_column(String(160))
