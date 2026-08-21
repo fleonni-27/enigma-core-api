@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Numeric, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -47,3 +48,15 @@ class OddsSnapshot(Base):
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     snapshot_window: Mapped[str | None] = mapped_column(String(30))
+
+
+class FixtureDataSnapshot(Base):
+    __tablename__ = "fixture_data_snapshots"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    source: Mapped[str] = mapped_column(String(80), default="sportmonks")
+    lineups: Mapped[dict | list | None] = mapped_column(JSONB)
+    statistics: Mapped[dict | list | None] = mapped_column(JSONB)
+    xg: Mapped[dict | list | None] = mapped_column(JSONB)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
