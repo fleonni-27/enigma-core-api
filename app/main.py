@@ -5,6 +5,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
 from app.backfill import backfill_fixtures
+from app.coverage_report import build_data_coverage_report, build_league_registry
 from app.data_backfill import backfill_fixture_data
 from app.database import SessionLocal, engine
 from app.fixture_data_ingestion import ingest_fixture_data_payload
@@ -13,7 +14,7 @@ from app.models import Fixture
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.5.0")
+app = FastAPI(title="Enigma Core API", version="0.6.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -50,6 +51,30 @@ def health() -> dict:
         "database_error": database_error,
         "service": "enigma-core-api",
     }
+
+
+@app.get("/registry/leagues")
+def league_registry() -> dict:
+    try:
+        return build_league_registry()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "failed", "error": exc.__class__.__name__},
+        ) from exc
+
+
+@app.get("/coverage/data")
+def data_coverage(start_date: date, end_date: date) -> dict:
+    try:
+        return build_data_coverage_report(start_date, end_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "failed", "error": exc.__class__.__name__},
+        ) from exc
 
 
 @app.get("/fixtures/today")
