@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import SessionLocal
 from app.models import Fixture
@@ -21,6 +22,14 @@ def _participant_by_location(participants: list[dict], location: str) -> dict | 
         if meta.get("location") == location:
             return participant
     return None
+
+
+def _safe_error(exc: Exception) -> str:
+    if isinstance(exc, SQLAlchemyError):
+        original = getattr(exc, "orig", None)
+        if original is not None:
+            return str(original)[:800]
+    return str(exc)[:800]
 
 
 def ingest_fixtures_payload(payload: dict) -> dict:
@@ -57,20 +66,26 @@ def ingest_fixtures_payload(payload: dict) -> dict:
 
                 if existing is None:
                     session.add(Fixture(sportmonks_id=sportmonks_id, **values))
+                    session.flush()
                     created += 1
                 else:
                     for field, value in values.items():
                         setattr(existing, field, value)
+                    session.flush()
                     updated += 1
             except Exception as exc:
-                errors.append({"sportmonks_id": raw.get("id"), "error": exc.__class__.__name__})
+                session.rollback()
+                errors.append({
+                    "sportmonks_id": raw.get("id"),
+                    "error": exc.__class__.__name__,
+                    "detail": _safe_error(exc),
+                })
 
         if errors:
-            session.rollback()
             return {
                 "status": "failed",
-                "created": 0,
-                "updated": 0,
+                "created": created,
+                "updated": updated,
                 "skipped": skipped,
                 "errors": errors,
             }
