@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, time, timezone
 
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import func, select, text
@@ -12,7 +12,7 @@ from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 from app.backfill import backfill_fixtures
 
-app = FastAPI(title="Enigma Core API", version="0.4.1")
+app = FastAPI(title="Enigma Core API", version="0.4.2")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -72,16 +72,23 @@ def fixture_coverage(start_date: date, end_date: date) -> dict:
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
 
-    with SessionLocal() as session:
-        start_dt = f"{start_date.isoformat()} 00:00:00+00"
-        end_dt = f"{end_date.isoformat()} 23:59:59+00"
-        rows = session.execute(
-            select(Fixture.league_name, func.count(Fixture.id))
-            .where(Fixture.starts_at >= start_dt, Fixture.starts_at <= end_dt)
-            .group_by(Fixture.league_name)
-            .order_by(func.count(Fixture.id).desc())
-        ).all()
-        total = sum(int(count) for _, count in rows)
+    start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+
+    try:
+        with SessionLocal() as session:
+            rows = session.execute(
+                select(Fixture.league_name, func.count(Fixture.id).label("fixture_count"))
+                .where(Fixture.starts_at.between(start_dt, end_dt))
+                .group_by(Fixture.league_name)
+                .order_by(func.count(Fixture.id).desc())
+            ).all()
+            total = sum(int(count) for _, count in rows)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "failed", "error": exc.__class__.__name__},
+        ) from exc
 
     return {
         "status": "ok",
