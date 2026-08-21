@@ -6,11 +6,12 @@ from fastapi import HTTPException, Query
 
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main_legacy_v014 import app
+from app.training_dataset import build_training_dataset
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.15.0"
+app.version = "0.16.0"
 
-# Replace only the historical controller route; preserve all other v0.14.0 routes.
+# Replace only the historical controller route; preserve all other legacy routes.
 app.router.routes = [
     route
     for route in app.router.routes
@@ -62,6 +63,30 @@ def upstream_exception_endpoint(
             end_date=end_date,
             leagues=leagues,
             limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/training/dataset")
+def training_dataset_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    lookback_matches: int = Query(default=5, ge=1, le=10),
+    min_history_matches: int = Query(default=3, ge=1, le=10),
+) -> dict:
+    try:
+        return build_training_dataset(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            limit=limit,
+            lookback_matches=lookback_matches,
+            min_history_matches=min_history_matches,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
