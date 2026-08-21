@@ -15,9 +15,10 @@ from app.ingestion import ingest_fixtures_payload
 from app.models import Fixture
 from app.monthly_backfill import backfill_monthly
 from app.odds_ingestion import ingest_prematch_odds_payload
+from app.quality_batch import build_quality_batch_report
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.9.0")
+app = FastAPI(title="Enigma Core API", version="0.10.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -90,6 +91,26 @@ def fixture_quality_endpoint(sportmonks_fixture_id: int) -> dict:
         return result
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/quality/batch")
+def quality_batch_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict:
+    try:
+        return build_quality_batch_report(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
