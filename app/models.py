@@ -22,11 +22,11 @@ class Fixture(Base):
 
 class Prediction(Base):
     __tablename__ = "predictions"
-    __table_args__ = (UniqueConstraint("fixture_id", "window", "model_version"),)
+    __table_args__ = (UniqueConstraint("fixture_id", "prediction_window", "model_version"),)
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
-    window: Mapped[str] = mapped_column(String(30))  # J0, J1, PRE_CLOSE
+    prediction_window: Mapped[str] = mapped_column(String(30))  # J0, J1, PRE_CLOSE
     model_version: Mapped[str] = mapped_column(String(30))
     p_home: Mapped[Decimal] = mapped_column(Numeric(8, 6))
     p_draw: Mapped[Decimal] = mapped_column(Numeric(8, 6))
@@ -46,4 +46,4 @@ class OddsSnapshot(Base):
     source: Mapped[str] = mapped_column(String(80), default="sportmonks")
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-    window: Mapped[str | None] = mapped_column(String(30))
+    snapshot_window: Mapped[str | None] = mapped_column(String(30))
