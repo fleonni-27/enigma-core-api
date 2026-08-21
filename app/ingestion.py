@@ -56,9 +56,7 @@ def ingest_fixtures_payload(payload: dict) -> dict:
                     select(Fixture).where(Fixture.sportmonks_id == sportmonks_id)
                 )
 
-                league_id = raw.get("league_id") or league.get("id")
                 values = {
-                    "league_id": int(league_id) if league_id is not None else None,
                     "league_name": league.get("name"),
                     "home_team": home.get("name") or "Unknown",
                     "away_team": away.get("name") or "Unknown",
