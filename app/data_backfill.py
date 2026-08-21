@@ -6,11 +6,21 @@ from sqlalchemy import exists, select
 
 from app.database import SessionLocal
 from app.fixture_data_ingestion import ingest_fixture_data_payload
+from app.league_registry import canonical_league
 from app.models import Fixture, FixtureDataSnapshot
 from app.sportmonks import SportmonksClient
 
 
 MAX_FIXTURES_PER_RUN = 25
+
+
+def _requested_league_keys(leagues: list[str] | None) -> set[str]:
+    keys: set[str] = set()
+    for league in leagues or []:
+        canonical = canonical_league(league)
+        if canonical.get("target") and canonical.get("key"):
+            keys.add(str(canonical["key"]))
+    return keys
 
 
 async def backfill_fixture_data(
@@ -27,16 +37,25 @@ async def backfill_fixture_data(
 
     start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+    requested_keys = _requested_league_keys(leagues)
 
     with SessionLocal() as session:
         query = select(Fixture).where(Fixture.starts_at.between(start_dt, end_dt))
-        if leagues:
-            query = query.where(Fixture.league_name.in_(leagues))
         if skip_existing:
             query = query.where(
                 ~exists().where(FixtureDataSnapshot.fixture_id == Fixture.id)
             )
-        fixtures = session.scalars(query.order_by(Fixture.starts_at.asc()).limit(limit)).all()
+        candidates = session.scalars(query.order_by(Fixture.starts_at.asc())).all()
+
+    fixtures: list[Fixture] = []
+    for fixture in candidates:
+        if requested_keys:
+            fixture_key = canonical_league(fixture.league_name).get("key")
+            if fixture_key not in requested_keys:
+                continue
+        fixtures.append(fixture)
+        if len(fixtures) >= limit:
+            break
 
     client = SportmonksClient()
     completed = 0
@@ -57,6 +76,7 @@ async def backfill_fixture_data(
             results.append({
                 "sportmonks_fixture_id": fixture.sportmonks_id,
                 "league": fixture.league_name,
+                "canonical_league": canonical_league(fixture.league_name).get("canonical_name"),
                 "status": result.get("status"),
                 "lineups_count": result.get("lineups_count", 0),
                 "statistics_count": result.get("statistics_count", 0),
@@ -67,6 +87,7 @@ async def backfill_fixture_data(
             results.append({
                 "sportmonks_fixture_id": fixture.sportmonks_id,
                 "league": fixture.league_name,
+                "canonical_league": canonical_league(fixture.league_name).get("canonical_name"),
                 "status": "failed",
                 "error": exc.__class__.__name__,
             })
@@ -76,6 +97,7 @@ async def backfill_fixture_data(
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "leagues": leagues or [],
+        "normalized_league_keys": sorted(requested_keys),
         "skip_existing": skip_existing,
         "limit": limit,
         "selected_fixtures": len(fixtures),
