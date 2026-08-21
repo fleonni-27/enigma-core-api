@@ -69,6 +69,8 @@ async def run_historical_controller(
 ) -> dict:
     if end_date < start_date:
         raise ValueError("end_date must be on or after start_date")
+    if not skip_existing:
+        raise ValueError("historical controller requires skip_existing=true to preserve idempotent resume behavior")
     if batch_size < 1 or batch_size > MAX_BATCH_SIZE:
         raise ValueError(f"batch_size must be between 1 and {MAX_BATCH_SIZE}")
     if max_batches_per_month < 1 or max_batches_per_month > MAX_BATCHES_PER_MONTH:
@@ -120,7 +122,7 @@ async def run_historical_controller(
                 end_date=window_end,
                 leagues=leagues,
                 limit=batch_size,
-                skip_existing=skip_existing,
+                skip_existing=True,
             )
             selected = int(data_result.get("selected_fixtures", 0))
             completed = int(data_result.get("completed", 0))
@@ -171,14 +173,17 @@ async def run_historical_controller(
         feature_summary = features.get("summary") or {}
         missing = int(feature_summary.get("missing_snapshots", 0) or 0)
         incomplete = int(((feature_summary.get("profiles") or {}).get("INCOMPLETE", 0)) or 0)
-        month_complete = missing == 0 and incomplete == 0
+        selected_report_fixtures = int(features.get("selected_fixtures", 0) or 0)
+        report_truncated = selected_report_fixtures >= report_limit
+        month_complete = exhausted and missing == 0 and incomplete == 0 and not report_truncated
 
         month_result["checkpoint"] = {
             "resumable": True,
-            "skip_existing": skip_existing,
+            "skip_existing": True,
             "batch_exhausted": exhausted,
             "missing_snapshots": missing,
             "incomplete_snapshots": incomplete,
+            "report_truncated_or_at_limit": report_truncated,
             "month_complete": month_complete,
         }
         if not month_complete:
@@ -195,7 +200,7 @@ async def run_historical_controller(
         "batch_size": batch_size,
         "max_batches_per_month": max_batches_per_month,
         "ingest_fixtures": ingest_fixtures,
-        "skip_existing": skip_existing,
+        "skip_existing": True,
         "report_limit": report_limit,
         "limits": {
             "max_months_per_request": MAX_MONTHS_PER_CONTROLLER_RUN,
@@ -211,5 +216,6 @@ async def run_historical_controller(
             "quality_after_each_month": True,
             "feature_profile_after_each_month": True,
             "xg_absence_is_zero": False,
+            "report_limit_safety": "a month is never marked complete when the audit report reaches its limit",
         },
     }
