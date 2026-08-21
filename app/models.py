@@ -13,6 +13,7 @@ class Fixture(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     sportmonks_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    league_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     league_name: Mapped[str | None] = mapped_column(String(160))
     home_team: Mapped[str] = mapped_column(String(160))
     away_team: Mapped[str] = mapped_column(String(160))
@@ -27,7 +28,7 @@ class Prediction(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
-    prediction_window: Mapped[str] = mapped_column(String(30))  # J0, J1, PRE_CLOSE
+    prediction_window: Mapped[str] = mapped_column(String(30))
     model_version: Mapped[str] = mapped_column(String(30))
     p_home: Mapped[Decimal] = mapped_column(Numeric(8, 6))
     p_draw: Mapped[Decimal] = mapped_column(Numeric(8, 6))
