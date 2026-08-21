@@ -1,17 +1,18 @@
 from datetime import date
 
 from fastapi import FastAPI, HTTPException, Query
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
-from app.backfill import backfill_fixtures
-from app.database import engine
+from app.database import SessionLocal, engine
 from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
+from app.models import Fixture
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
+from app.backfill import backfill_fixtures
 
-app = FastAPI(title="Enigma Core API", version="0.4.0")
+app = FastAPI(title="Enigma Core API", version="0.4.1")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -66,6 +67,34 @@ async def fixtures_by_date(target_date: date) -> dict:
         raise HTTPException(status_code=502, detail="Sportmonks request failed") from exc
 
 
+@app.get("/coverage/fixtures")
+def fixture_coverage(start_date: date, end_date: date) -> dict:
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+
+    with SessionLocal() as session:
+        start_dt = f"{start_date.isoformat()} 00:00:00+00"
+        end_dt = f"{end_date.isoformat()} 23:59:59+00"
+        rows = session.execute(
+            select(Fixture.league_name, func.count(Fixture.id))
+            .where(Fixture.starts_at >= start_dt, Fixture.starts_at <= end_dt)
+            .group_by(Fixture.league_name)
+            .order_by(func.count(Fixture.id).desc())
+        ).all()
+        total = sum(int(count) for _, count in rows)
+
+    return {
+        "status": "ok",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "total_fixtures": total,
+        "leagues": [
+            {"league": league or "Unknown", "fixtures": int(count)}
+            for league, count in rows
+        ],
+    }
+
+
 @app.post("/ingest/fixtures/date/{target_date}")
 async def ingest_fixtures_by_date(target_date: date) -> dict:
     try:
@@ -81,16 +110,13 @@ async def ingest_fixtures_by_date(target_date: date) -> dict:
 
 
 @app.post("/backfill/fixtures")
-async def backfill_fixture_history(
-    start_date: date = Query(...),
-    end_date: date = Query(...),
-) -> dict:
-    result = await backfill_fixtures(start_date=start_date, end_date=end_date)
-    if result.get("status") == "invalid_range":
-        raise HTTPException(status_code=400, detail=result)
-    if result.get("status") == "range_too_large":
-        raise HTTPException(status_code=400, detail=result)
-    return result
+async def backfill_fixtures_endpoint(start_date: date, end_date: date) -> dict:
+    try:
+        return await backfill_fixtures(start_date, end_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Fixture backfill failed") from exc
 
 
 @app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
