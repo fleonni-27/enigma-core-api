@@ -20,14 +20,12 @@ def _has_payload(value: object) -> bool:
 
 def build_league_registry() -> dict:
     with SessionLocal() as session:
-        rows = session.execute(
-            select(Fixture.league_id, Fixture.league_name).distinct()
-        ).all()
+        rows = session.execute(select(Fixture.league_name).distinct()).all()
 
     observed: dict[str, dict] = {}
     unmapped: list[dict] = []
 
-    for league_id, league_name in rows:
+    for (league_name,) in rows:
         canonical = canonical_league(league_name)
         if canonical["target"]:
             key = canonical["key"]
@@ -37,16 +35,13 @@ def build_league_registry() -> dict:
                     "key": key,
                     "canonical_name": canonical["canonical_name"],
                     "priority": canonical["priority"],
-                    "sportmonks_ids": [],
                     "observed_names": [],
                 },
             )
-            if league_id is not None and int(league_id) not in item["sportmonks_ids"]:
-                item["sportmonks_ids"].append(int(league_id))
             if league_name and league_name not in item["observed_names"]:
                 item["observed_names"].append(league_name)
         else:
-            unmapped.append({"sportmonks_id": league_id, "name": league_name or "Unknown"})
+            unmapped.append({"name": league_name or "Unknown"})
 
     defined = []
     for definition in registry_definition():
@@ -54,7 +49,6 @@ def build_league_registry() -> dict:
         defined.append(
             {
                 **definition,
-                "sportmonks_ids": sorted(observed.get(key, {}).get("sportmonks_ids", [])),
                 "observed_names": sorted(observed.get(key, {}).get("observed_names", [])),
                 "observed": key in observed,
             }
@@ -63,7 +57,8 @@ def build_league_registry() -> dict:
     return {
         "status": "ok",
         "target_leagues": defined,
-        "unmapped_observed_leagues": sorted(unmapped, key=lambda x: (str(x["name"]), str(x["sportmonks_id"]))),
+        "unmapped_observed_leagues": sorted(unmapped, key=lambda x: str(x["name"])),
+        "note": "Sportmonks league IDs will be added in the next schema migration; canonical matching already uses aliases safely.",
     }
 
 
@@ -101,7 +96,6 @@ def build_data_coverage_report(start_date: date, end_date: date) -> dict:
             "with_lineups": 0,
             "with_statistics": 0,
             "with_xg": 0,
-            "sportmonks_ids": set(),
             "observed_names": set(),
             "target": False,
             "priority": None,
@@ -117,8 +111,6 @@ def build_data_coverage_report(start_date: date, end_date: date) -> dict:
         bucket["target"] = bool(canonical["target"])
         bucket["priority"] = canonical["priority"]
         bucket["canonical_name"] = canonical["canonical_name"]
-        if fixture.league_id is not None:
-            bucket["sportmonks_ids"].add(int(fixture.league_id))
         if fixture.league_name:
             bucket["observed_names"].add(fixture.league_name)
 
@@ -142,7 +134,6 @@ def build_data_coverage_report(start_date: date, end_date: date) -> dict:
                 "league": bucket["canonical_name"],
                 "target": bucket["target"],
                 "priority": bucket["priority"],
-                "sportmonks_ids": sorted(bucket["sportmonks_ids"]),
                 "observed_names": sorted(bucket["observed_names"]),
                 "fixtures": fixtures_count,
                 "snapshots": bucket["snapshots"],
