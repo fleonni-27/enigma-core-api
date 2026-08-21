@@ -8,6 +8,7 @@ from app.audit import audit_fixture
 from app.backfill import backfill_fixtures
 from app.coverage_report import build_data_coverage_report, build_league_registry
 from app.data_backfill import backfill_fixture_data
+from app.data_quality import assess_fixture_quality
 from app.database import SessionLocal, engine
 from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
@@ -16,7 +17,7 @@ from app.monthly_backfill import backfill_monthly
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.8.0")
+app = FastAPI(title="Enigma Core API", version="0.9.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -58,9 +59,17 @@ def league_registry() -> dict:
 
 
 @app.get("/audit/fixture/{sportmonks_fixture_id}")
-def audit_fixture_endpoint(sportmonks_fixture_id: int, include_raw: bool = False, sample_size: int = Query(default=5, ge=0, le=25)) -> dict:
+def audit_fixture_endpoint(
+    sportmonks_fixture_id: int,
+    include_raw: bool = False,
+    sample_size: int = Query(default=5, ge=0, le=25),
+) -> dict:
     try:
-        result = audit_fixture(sportmonks_fixture_id=sportmonks_fixture_id, include_raw=include_raw, sample_size=sample_size)
+        result = audit_fixture(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            include_raw=include_raw,
+            sample_size=sample_size,
+        )
         if result.get("status") == "fixture_not_found":
             raise HTTPException(status_code=404, detail=result)
         return result
@@ -68,6 +77,19 @@ def audit_fixture_endpoint(sportmonks_fixture_id: int, include_raw: bool = False
         raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/quality/fixture/{sportmonks_fixture_id}")
+def fixture_quality_endpoint(sportmonks_fixture_id: int) -> dict:
+    try:
+        result = assess_fixture_quality(sportmonks_fixture_id)
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
@@ -106,11 +128,22 @@ def fixture_coverage(start_date: date, end_date: date) -> dict:
     end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
     try:
         with SessionLocal() as session:
-            rows = session.execute(select(Fixture.league_name, func.count(Fixture.id).label("fixture_count")).where(Fixture.starts_at.between(start_dt, end_dt)).group_by(Fixture.league_name).order_by(func.count(Fixture.id).desc())).all()
+            rows = session.execute(
+                select(Fixture.league_name, func.count(Fixture.id).label("fixture_count"))
+                .where(Fixture.starts_at.between(start_dt, end_dt))
+                .group_by(Fixture.league_name)
+                .order_by(func.count(Fixture.id).desc())
+            ).all()
             total = sum(int(count) for _, count in rows)
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
-    return {"status": "ok", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "total_fixtures": total, "leagues": [{"league": league or "Unknown", "fixtures": int(count)} for league, count in rows]}
+    return {
+        "status": "ok",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "total_fixtures": total,
+        "leagues": [{"league": league or "Unknown", "fixtures": int(count)} for league, count in rows],
+    }
 
 
 @app.post("/ingest/fixtures/date/{target_date}")
@@ -138,9 +171,21 @@ async def backfill_fixtures_endpoint(start_date: date, end_date: date) -> dict:
 
 
 @app.post("/backfill/data")
-async def backfill_fixture_data_endpoint(start_date: date, end_date: date, leagues: list[str] | None = Query(default=None), limit: int = Query(default=10, ge=1, le=25), skip_existing: bool = True) -> dict:
+async def backfill_fixture_data_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=25),
+    skip_existing: bool = True,
+) -> dict:
     try:
-        return await backfill_fixture_data(start_date=start_date, end_date=end_date, leagues=leagues, limit=limit, skip_existing=skip_existing)
+        return await backfill_fixture_data(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            limit=limit,
+            skip_existing=skip_existing,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -148,9 +193,23 @@ async def backfill_fixture_data_endpoint(start_date: date, end_date: date, leagu
 
 
 @app.post("/backfill/monthly")
-async def backfill_monthly_endpoint(start_date: date, end_date: date, leagues: list[str] | None = Query(default=None), enrich_data: bool = False, data_limit_per_month: int = Query(default=25, ge=1, le=25), skip_existing: bool = True) -> dict:
+async def backfill_monthly_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    enrich_data: bool = False,
+    data_limit_per_month: int = Query(default=25, ge=1, le=25),
+    skip_existing: bool = True,
+) -> dict:
     try:
-        return await backfill_monthly(start_date=start_date, end_date=end_date, leagues=leagues, enrich_data=enrich_data, data_limit_per_month=data_limit_per_month, skip_existing=skip_existing)
+        return await backfill_monthly(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            enrich_data=enrich_data,
+            data_limit_per_month=data_limit_per_month,
+            skip_existing=skip_existing,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -158,10 +217,17 @@ async def backfill_monthly_endpoint(start_date: date, end_date: date, leagues: l
 
 
 @app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
-async def ingest_prematch_odds(sportmonks_fixture_id: int, snapshot_window: str | None = Query(default=None, max_length=30)) -> dict:
+async def ingest_prematch_odds(
+    sportmonks_fixture_id: int,
+    snapshot_window: str | None = Query(default=None, max_length=30),
+) -> dict:
     try:
         payload = await SportmonksClient().prematch_odds_by_fixture(sportmonks_fixture_id)
-        result = ingest_prematch_odds_payload(sportmonks_fixture_id=sportmonks_fixture_id, payload=payload, snapshot_window=snapshot_window)
+        result = ingest_prematch_odds_payload(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            payload=payload,
+            snapshot_window=snapshot_window,
+        )
         if result.get("status") == "fixture_not_found":
             raise HTTPException(status_code=404, detail=result)
         return result
