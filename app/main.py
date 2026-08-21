@@ -4,13 +4,14 @@ from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
+from app.backfill import backfill_fixtures
 from app.database import engine
 from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.3.0")
+app = FastAPI(title="Enigma Core API", version="0.4.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -77,6 +78,19 @@ async def ingest_fixtures_by_date(target_date: date) -> dict:
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Fixture ingestion failed") from exc
+
+
+@app.post("/backfill/fixtures")
+async def backfill_fixture_history(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+) -> dict:
+    result = await backfill_fixtures(start_date=start_date, end_date=end_date)
+    if result.get("status") == "invalid_range":
+        raise HTTPException(status_code=400, detail=result)
+    if result.get("status") == "range_too_large":
+        raise HTTPException(status_code=400, detail=result)
+    return result
 
 
 @app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
