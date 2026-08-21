@@ -30,3 +30,17 @@ class SportmonksClient:
             response = await client.get(url, params=params)
             response.raise_for_status()
             return response.json()
+
+    async def enriched_fixture(self, fixture_id: int) -> dict:
+        url = f"{self.settings.sportmonks_base_url}/fixtures/{fixture_id}"
+        params = {
+            "api_token": self.settings.sportmonks_api_token,
+            "include": (
+                "participants;league;lineups.player;lineups.details.type;"
+                "statistics.type;xGFixture.type"
+            ),
+        }
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
