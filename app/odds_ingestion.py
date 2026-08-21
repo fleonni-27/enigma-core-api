@@ -28,6 +28,43 @@ def _name_or_id(raw: dict, nested_key: str, id_key: str, prefix: str) -> str:
     return f"{prefix}:{identifier}" if identifier is not None else f"{prefix}:unknown"
 
 
+def _is_core_market(market_name: str) -> bool:
+    name = market_name.lower().strip()
+
+    blocked_tokens = (
+        "1st half",
+        "first half",
+        "2nd half",
+        "second half",
+        "corner",
+        "card",
+        "player",
+        "goalscorer",
+        "booking",
+        "throw",
+        "foul",
+        "tackle",
+        "shot",
+    )
+    if any(token in name for token in blocked_tokens):
+        return False
+
+    core_tokens = (
+        "fulltime result",
+        "full time result",
+        "match winner",
+        "3-way result",
+        "3 way result",
+        "both teams to score",
+        "btts",
+        "over/under",
+        "over under",
+        "total goals",
+        "goal line",
+    )
+    return any(token in name for token in core_tokens)
+
+
 def ingest_prematch_odds_payload(
     sportmonks_fixture_id: int,
     payload: dict,
@@ -50,6 +87,7 @@ def ingest_prematch_odds_payload(
 
         created = 0
         skipped = 0
+        filtered_out = 0
         errors: list[dict] = []
 
         for raw in rows:
@@ -60,13 +98,17 @@ def ingest_prematch_odds_payload(
                     skipped += 1
                     continue
 
+                bookmaker = _name_or_id(raw, "bookmaker", "bookmaker_id", "bookmaker")
+                market = _name_or_id(raw, "market", "market_id", "market")
+
+                if not _is_core_market(market):
+                    filtered_out += 1
+                    continue
+
                 odd = Decimal(str(raw_value))
                 if odd <= 1:
                     skipped += 1
                     continue
-
-                bookmaker = _name_or_id(raw, "bookmaker", "bookmaker_id", "bookmaker")
-                market = _name_or_id(raw, "market", "market_id", "market")
 
                 session.add(
                     OddsSnapshot(
@@ -99,6 +141,7 @@ def ingest_prematch_odds_payload(
         "sportmonks_fixture_id": sportmonks_fixture_id,
         "received": len(rows),
         "created": created,
+        "filtered_out": filtered_out,
         "skipped": skipped,
         "snapshot_window": snapshot_window,
         "errors": errors,
