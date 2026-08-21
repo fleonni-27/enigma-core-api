@@ -11,10 +11,11 @@ from app.database import SessionLocal, engine
 from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
 from app.models import Fixture
+from app.monthly_backfill import backfill_monthly
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.6.0")
+app = FastAPI(title="Enigma Core API", version="0.7.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -172,6 +173,30 @@ async def backfill_fixture_data_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Fixture data backfill failed") from exc
+
+
+@app.post("/backfill/monthly")
+async def backfill_monthly_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    enrich_data: bool = False,
+    data_limit_per_month: int = Query(default=25, ge=1, le=25),
+    skip_existing: bool = True,
+) -> dict:
+    try:
+        return await backfill_monthly(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            enrich_data=enrich_data,
+            data_limit_per_month=data_limit_per_month,
+            skip_existing=skip_existing,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Monthly backfill failed") from exc
 
 
 @app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
