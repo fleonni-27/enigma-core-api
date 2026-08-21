@@ -19,3 +19,14 @@ class SportmonksClient:
             response = await client.get(url, params=params)
             response.raise_for_status()
             return response.json()
+
+    async def prematch_odds_by_fixture(self, fixture_id: int) -> dict:
+        url = f"{self.settings.sportmonks_base_url}/odds/pre-match/fixtures/{fixture_id}"
+        params = {
+            "api_token": self.settings.sportmonks_api_token,
+            "include": "market;bookmaker",
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
