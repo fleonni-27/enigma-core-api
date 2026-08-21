@@ -6,10 +6,10 @@ from fastapi import HTTPException, Query
 
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main_legacy_v014 import app
-from app.training_dataset import build_training_dataset
+from app.training_dataset_v11 import build_training_dataset_v11
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.16.0"
+app.version = "0.17.0"
 
 # Replace only the historical controller route; preserve all other legacy routes.
 app.router.routes = [
@@ -75,18 +75,24 @@ def training_dataset_endpoint(
     start_date: date,
     end_date: date,
     leagues: list[str] | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=200),
     lookback_matches: int = Query(default=5, ge=1, le=10),
     min_history_matches: int = Query(default=3, ge=1, le=10),
+    include_skipped_details: bool = False,
+    skipped_detail_limit: int = Query(default=50, ge=0, le=200),
 ) -> dict:
     try:
-        return build_training_dataset(
+        return build_training_dataset_v11(
             start_date=start_date,
             end_date=end_date,
             leagues=leagues,
-            limit=limit,
+            page=page,
+            page_size=page_size,
             lookback_matches=lookback_matches,
             min_history_matches=min_history_matches,
+            include_skipped_details=include_skipped_details,
+            skipped_detail_limit=skipped_detail_limit,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
