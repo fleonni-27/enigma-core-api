@@ -5,11 +5,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from app.database import engine
+from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
 from app.odds_ingestion import ingest_prematch_odds_payload
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.2.0")
+app = FastAPI(title="Enigma Core API", version="0.3.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -97,6 +98,20 @@ async def ingest_prematch_odds(
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Odds ingestion failed") from exc
+
+
+@app.post("/ingest/data/fixture/{sportmonks_fixture_id}")
+async def ingest_fixture_data(sportmonks_fixture_id: int) -> dict:
+    try:
+        payload = await SportmonksClient().enriched_fixture(sportmonks_fixture_id)
+        result = ingest_fixture_data_payload(sportmonks_fixture_id, payload)
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Fixture data ingestion failed") from exc
 
 
 @app.get("/fixtures/{fixture_id}")
