@@ -10,6 +10,7 @@ from app.coverage_report import build_data_coverage_report, build_league_registr
 from app.data_backfill import backfill_fixture_data
 from app.data_quality import assess_fixture_quality
 from app.database import SessionLocal, engine
+from app.feature_profiles import build_feature_profile_report, classify_fixture_feature_profile
 from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.ingestion import ingest_fixtures_payload
 from app.models import Fixture
@@ -18,7 +19,7 @@ from app.odds_ingestion import ingest_prematch_odds_payload
 from app.quality_batch import build_quality_batch_report
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.11.0")
+app = FastAPI(title="Enigma Core API", version="0.12.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -111,6 +112,39 @@ def quality_batch_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/quality/features")
+def feature_profile_report_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict:
+    try:
+        return build_feature_profile_report(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/quality/features/{sportmonks_fixture_id}")
+def fixture_feature_profile_endpoint(sportmonks_fixture_id: int) -> dict:
+    try:
+        result = classify_fixture_feature_profile(sportmonks_fixture_id)
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
