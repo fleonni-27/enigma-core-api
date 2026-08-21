@@ -12,6 +12,7 @@ from app.data_quality import assess_fixture_quality
 from app.database import SessionLocal, engine
 from app.feature_profiles import build_feature_profile_report, classify_fixture_feature_profile
 from app.fixture_data_ingestion import ingest_fixture_data_payload
+from app.historical_controller import run_historical_controller
 from app.ingestion import ingest_fixtures_payload
 from app.models import Fixture
 from app.monthly_backfill import backfill_monthly
@@ -19,7 +20,7 @@ from app.odds_ingestion import ingest_prematch_odds_payload
 from app.quality_batch import build_quality_batch_report
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.12.0")
+app = FastAPI(title="Enigma Core API", version="0.13.0")
 
 
 def classify_database_error(exc: Exception) -> str:
@@ -269,6 +270,34 @@ async def backfill_monthly_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Monthly backfill failed") from exc
+
+
+@app.post("/backfill/historical/controller")
+async def historical_controller_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    batch_size: int = Query(default=25, ge=1, le=25),
+    max_batches_per_month: int = Query(default=4, ge=1, le=8),
+    ingest_fixtures: bool = True,
+    skip_existing: bool = True,
+    report_limit: int = Query(default=200, ge=1, le=200),
+) -> dict:
+    try:
+        return await run_historical_controller(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            batch_size=batch_size,
+            max_batches_per_month=max_batches_per_month,
+            ingest_fixtures=ingest_fixtures,
+            skip_existing=skip_existing,
+            report_limit=report_limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
 
 @app.post("/ingest/odds/fixture/{sportmonks_fixture_id}")
