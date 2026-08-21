@@ -18,7 +18,7 @@ from app.odds_ingestion import ingest_prematch_odds_payload
 from app.quality_batch import build_quality_batch_report
 from app.sportmonks import SportmonksClient
 
-app = FastAPI(title="Enigma Core API", version="0.10.0")
+app = FastAPI(title="Enigma Core API", version="0.11.0")
 
 
 def classify_database_error(exc: Exception) -> str:
