@@ -8,6 +8,7 @@ from app.baseline_1x2 import build_baseline_1x2_temporal_v1
 from app.baseline_1x2_policy import build_baseline_1x2_confidence_policy_v1
 from app.baseline_1x2_policy_v2 import build_baseline_1x2_confidence_policy_v2
 from app.confidence_calibration import build_confidence_calibration_v1
+from app.probability_calibration import build_probability_calibration_v1
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main_legacy_v014 import app
 from app.model_dataset import build_model_dataset_v1
@@ -16,7 +17,7 @@ from app.training_dataset_split import build_temporal_training_split
 from app.training_dataset_v11 import build_training_dataset_v11
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.24.0"
+app.version = "0.25.0"
 
 app.router.routes = [
     route
@@ -316,6 +317,40 @@ def confidence_calibration_v1_endpoint(
             validation_ratio=validation_ratio,
             max_rows=max_rows,
             class_weight_balanced=class_weight_balanced,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/models/baseline/1x2/probability-calibration")
+def probability_calibration_v1_endpoint(
+    start_date: date,
+    end_date: date,
+    leagues: list[str] | None = Query(default=None),
+    family: str = Query(default="STANDARD"),
+    lookback_matches: int = Query(default=5, ge=1, le=10),
+    min_history_matches: int = Query(default=3, ge=1, le=10),
+    train_ratio: float = Query(default=0.70, gt=0, lt=1),
+    validation_ratio: float = Query(default=0.15, gt=0, lt=1),
+    max_rows: int = Query(default=5000, ge=1, le=5000),
+    class_weight_balanced: bool = False,
+    calibration_ratio: float = Query(default=0.20, ge=0.10, le=0.40),
+) -> dict:
+    try:
+        return build_probability_calibration_v1(
+            start_date=start_date,
+            end_date=end_date,
+            leagues=leagues,
+            family=family,
+            lookback_matches=lookback_matches,
+            min_history_matches=min_history_matches,
+            train_ratio=train_ratio,
+            validation_ratio=validation_ratio,
+            max_rows=max_rows,
+            class_weight_balanced=class_weight_balanced,
+            calibration_ratio=calibration_ratio,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
