@@ -12,6 +12,7 @@ from app.data_quality import assess_fixture_quality
 from app.database import SessionLocal, engine
 from app.feature_profiles import build_feature_profile_report, classify_fixture_feature_profile
 from app.fixture_data_ingestion import ingest_fixture_data_payload
+from app.future_batch import router as future_batch_router
 from app.historical_controller import run_historical_controller
 from app.ingestion import ingest_fixtures_payload
 from app.models import Fixture
@@ -22,6 +23,7 @@ from app.repair_incomplete import repair_incomplete_fixtures
 from app.sportmonks import SportmonksClient
 
 app = FastAPI(title="Enigma Core API", version="0.14.0")
+app.include_router(future_batch_router)
 
 
 def classify_database_error(exc: Exception) -> str:
