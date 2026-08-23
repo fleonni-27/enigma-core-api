@@ -38,6 +38,33 @@ def is_upstream_exception_fixture(fixture_id: int) -> bool:
         return bool(snapshot and snapshot.source == UPSTREAM_EXCEPTION_SOURCE)
 
 
+def register_upstream_exception_fixture(fixture_id: int) -> int | None:
+    """Persist an idempotent upstream-unavailable marker for one DB fixture id.
+
+    The marker copies the latest payload so quality/profile assessment remains
+    unchanged while the snapshot source records that a fresh upstream retry was
+    exhausted. If the latest snapshot is already a marker, return it unchanged.
+    """
+    with SessionLocal() as session:
+        current = _latest_snapshot_for_fixture(session, fixture_id)
+        if current is None:
+            return None
+        if current.source == UPSTREAM_EXCEPTION_SOURCE:
+            return int(current.id)
+
+        marker = FixtureDataSnapshot(
+            fixture_id=fixture_id,
+            source=UPSTREAM_EXCEPTION_SOURCE,
+            lineups=current.lineups,
+            statistics=current.statistics,
+            xg=current.xg,
+        )
+        session.add(marker)
+        session.commit()
+        session.refresh(marker)
+        return int(marker.id)
+
+
 def count_upstream_exceptions(start_date: date, end_date: date, leagues: list[str] | None = None) -> int:
     start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
@@ -101,21 +128,9 @@ def register_upstream_exceptions(
     registered = 0
     for fixture in selected:
         assessment = assess_fixture_quality(int(fixture.sportmonks_id))
-        with SessionLocal() as session:
-            current = _latest_snapshot_for_fixture(session, int(fixture.id))
-            if current is None:
-                continue
-            marker = FixtureDataSnapshot(
-                fixture_id=fixture.id,
-                source=UPSTREAM_EXCEPTION_SOURCE,
-                lineups=current.lineups,
-                statistics=current.statistics,
-                xg=current.xg,
-            )
-            session.add(marker)
-            session.commit()
-            session.refresh(marker)
-            marker_id = int(marker.id)
+        marker_id = register_upstream_exception_fixture(int(fixture.id))
+        if marker_id is None:
+            continue
 
         registered += 1
         results.append({

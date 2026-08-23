@@ -11,6 +11,10 @@ from app.fixture_data_ingestion import ingest_fixture_data_payload
 from app.league_registry import canonical_league
 from app.models import Fixture
 from app.sportmonks import SportmonksClient
+from app.upstream_exceptions import (
+    is_upstream_exception_fixture,
+    register_upstream_exception_fixture,
+)
 
 MAX_REPAIRS_PER_RUN = 25
 
@@ -52,19 +56,25 @@ async def repair_incomplete_fixtures(
         ).all()
 
     targets: list[Fixture] = []
+    skipped_quarantined = 0
     for fixture in candidates:
         canonical = canonical_league(fixture.league_name)
         if requested_keys and canonical.get("key") not in requested_keys:
             continue
         assessment = assess_fixture_quality(int(fixture.sportmonks_id))
-        if _is_incomplete_assessment(assessment):
-            targets.append(fixture)
+        if not _is_incomplete_assessment(assessment):
+            continue
+        if is_upstream_exception_fixture(int(fixture.id)):
+            skipped_quarantined += 1
+            continue
+        targets.append(fixture)
         if len(targets) >= limit:
             break
 
     client = SportmonksClient()
     repaired = 0
     still_incomplete = 0
+    quarantined_upstream_unavailable = 0
     failed = 0
     results: list[dict] = []
 
@@ -77,9 +87,15 @@ async def repair_incomplete_fixtures(
             after = assess_fixture_quality(int(fixture.sportmonks_id))
             after_profile = classify_feature_profile_from_assessment(after)
 
+            upstream_exception_snapshot_id: int | None = None
             if after_profile.get("profile") == "INCOMPLETE":
                 still_incomplete += 1
-                repair_status = "upstream_data_unavailable_or_still_incomplete"
+                upstream_exception_snapshot_id = register_upstream_exception_fixture(int(fixture.id))
+                if upstream_exception_snapshot_id is not None:
+                    quarantined_upstream_unavailable += 1
+                    repair_status = "upstream_data_unavailable_quarantined"
+                else:
+                    repair_status = "upstream_data_unavailable_or_still_incomplete"
             else:
                 repaired += 1
                 repair_status = "repaired"
@@ -93,6 +109,7 @@ async def repair_incomplete_fixtures(
                     "away_team": fixture.away_team,
                     "status": repair_status,
                     "snapshot_id": ingest_result.get("snapshot_id"),
+                    "upstream_exception_snapshot_id": upstream_exception_snapshot_id,
                     "before": {
                         "quality_score": before.get("quality_score", 0),
                         "decision": before.get("decision"),
@@ -125,12 +142,12 @@ async def repair_incomplete_fixtures(
             )
 
     status = "ok"
-    if failed > 0 or still_incomplete > 0:
+    if failed > 0 or (still_incomplete > quarantined_upstream_unavailable):
         status = "partial"
 
     return {
         "status": status,
-        "version": "repair_incomplete_v1",
+        "version": "repair_incomplete_v2",
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "leagues": leagues or [],
@@ -139,12 +156,17 @@ async def repair_incomplete_fixtures(
         "selected_incomplete": len(targets),
         "repaired": repaired,
         "still_incomplete": still_incomplete,
+        "quarantined_upstream_unavailable": quarantined_upstream_unavailable,
+        "skipped_quarantined": skipped_quarantined,
         "failed": failed,
         "results": results,
         "policy": {
             "healthy_snapshots_are_never_touched": True,
             "repair_only_profile": "INCOMPLETE",
-            "repair_strategy": "fetch_fresh_sportmonks_payload_and_append_new_snapshot",
+            "repair_strategy": "fetch_fresh_sportmonks_payload_append_snapshot_then_quarantine_if_still_incomplete",
+            "quarantined_fixtures_are_not_selected_again": True,
+            "upstream_exception_training_eligible": False,
+            "upstream_exception_profile_remains": "INCOMPLETE",
             "latest_snapshot_wins_quality_assessment": True,
             "xg_absence_is_zero": False,
         },
