@@ -44,3 +44,22 @@ class SportmonksClient:
             response = await client.get(url, params=params)
             response.raise_for_status()
             return response.json()
+
+    async def fixture_result(self, fixture_id: int) -> dict:
+        url = f"{self.settings.sportmonks_base_url}/fixtures/{fixture_id}"
+        params = {
+            "api_token": self.settings.sportmonks_api_token,
+            "include": "scores;state;participants",
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
+
+
+# The production app composes the research router through future_batch. Installing
+# the settlement sub-router here keeps that legacy composition backward-compatible
+# without introducing a second top-level FastAPI app dependency.
+from app.outcome_settlement import install_outcome_settlement_routes
+
+install_outcome_settlement_routes()
