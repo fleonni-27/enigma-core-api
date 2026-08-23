@@ -1,0 +1,198 @@
+name: Historical Backfill 2022-2024
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/historical-backfill-2022-2024.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-backfill-2022-2024
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      API_BASE: https://enigma-core-api.onrender.com
+      BACKFILL_START: '2022-01-01'
+      BACKFILL_END: '2024-08-22'
+      MAX_PASSES_PER_MONTH: '5'
+    steps:
+      - name: Wait for production API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 20 "$API_BASE/health" | jq -e '.status == "ok"' >/dev/null; then
+              echo "Production API is healthy."
+              exit 0
+            fi
+            echo "Waiting for production API (attempt $attempt/30)..."
+            sleep 20
+          done
+          echo "Production API did not become healthy in time."
+          exit 1
+
+      - name: Run resumable historical backfill
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backfill-logs
+
+          LEAGUES=(
+            "Serie A"
+            "Serie B"
+            "Copa do Brasil"
+            "Copa Libertadores"
+            "Copa Sudamericana"
+            "Premier League"
+            "La Liga"
+            "Champions League"
+          )
+
+          python3 - <<'PY' > backfill-logs/month_windows.tsv
+          from calendar import monthrange
+          from datetime import date
+
+          start = date.fromisoformat("2022-01-01")
+          end = date.fromisoformat("2024-08-22")
+          current = start.replace(day=1)
+          while current <= end:
+              month_end = current.replace(day=monthrange(current.year, current.month)[1])
+              window_start = max(start, current)
+              window_end = min(end, month_end)
+              print(f"{window_start.isoformat()}\t{window_end.isoformat()}")
+              if current.month == 12:
+                  current = date(current.year + 1, 1, 1)
+              else:
+                  current = date(current.year, current.month + 1, 1)
+          PY
+
+          total_windows=$(wc -l < backfill-logs/month_windows.tsv | tr -d ' ')
+          completed_windows=0
+          partial_windows=0
+          total_data_completed=0
+          total_fixture_created=0
+          total_fixture_updated=0
+
+          call_controller() {
+            local start_date="$1"
+            local end_date="$2"
+            local ingest_fixtures="$3"
+            local output_file="$4"
+
+            local args=(
+              --silent
+              --show-error
+              --location
+              --max-time 1800
+              --request POST
+              --get
+              "$API_BASE/backfill/historical/controller"
+              --data-urlencode "start_date=$start_date"
+              --data-urlencode "end_date=$end_date"
+              --data-urlencode "batch_size=25"
+              --data-urlencode "max_batches_per_month=8"
+              --data-urlencode "ingest_fixtures=$ingest_fixtures"
+              --data-urlencode "skip_existing=true"
+              --data-urlencode "report_limit=200"
+            )
+            for league in "${LEAGUES[@]}"; do
+              args+=(--data-urlencode "leagues=$league")
+            done
+
+            local attempt http_code curl_exit
+            for attempt in 1 2 3; do
+              set +e
+              http_code=$(curl "${args[@]}" --output "$output_file" --write-out '%{http_code}')
+              curl_exit=$?
+              set -e
+              if [[ $curl_exit -eq 0 && "$http_code" =~ ^2 ]]; then
+                return 0
+              fi
+              echo "Controller request failed: HTTP=$http_code curl_exit=$curl_exit attempt=$attempt" >&2
+              if [[ -f "$output_file" ]]; then
+                cat "$output_file" >&2 || true
+              fi
+              sleep $((attempt * 20))
+            done
+            return 1
+          }
+
+          while IFS=$'\t' read -r month_start month_end; do
+            month_key="${month_start:0:7}"
+            echo "=== Backfill $month_start -> $month_end ==="
+            exhausted=false
+            ingest=true
+
+            for pass in $(seq 1 "$MAX_PASSES_PER_MONTH"); do
+              output="backfill-logs/${month_key}-pass-${pass}.json"
+              echo "Running pass $pass for $month_key (ingest_fixtures=$ingest)..."
+              if ! call_controller "$month_start" "$month_end" "$ingest" "$output"; then
+                echo "Fatal controller failure for $month_key pass $pass."
+                exit 1
+              fi
+
+              status=$(jq -r '.status // "unknown"' "$output")
+              selected=$(jq -r '.totals.data_selected // 0' "$output")
+              completed=$(jq -r '.totals.data_completed // 0' "$output")
+              fixture_created=$(jq -r '[.months[].fixtures.totals.created // 0] | add // 0' "$output")
+              fixture_updated=$(jq -r '[.months[].fixtures.totals.updated // 0] | add // 0' "$output")
+              exhausted=$(jq -r '.months[0].checkpoint.batch_exhausted // false' "$output")
+              missing=$(jq -r '.months[0].checkpoint.missing_snapshots // 0' "$output")
+              incomplete=$(jq -r '.months[0].checkpoint.incomplete_snapshots // 0' "$output")
+
+              total_data_completed=$((total_data_completed + completed))
+              total_fixture_created=$((total_fixture_created + fixture_created))
+              total_fixture_updated=$((total_fixture_updated + fixture_updated))
+
+              echo "status=$status selected=$selected completed=$completed exhausted=$exhausted missing=$missing incomplete=$incomplete"
+
+              if [[ "$exhausted" == "true" ]]; then
+                break
+              fi
+
+              ingest=false
+              sleep 5
+            done
+
+            if [[ "$exhausted" == "true" ]]; then
+              completed_windows=$((completed_windows + 1))
+            else
+              partial_windows=$((partial_windows + 1))
+              echo "WARNING: $month_key still has pending snapshot work after $MAX_PASSES_PER_MONTH passes." >&2
+            fi
+
+            sleep 10
+          done < backfill-logs/month_windows.tsv
+
+          {
+            echo "# Historical backfill 2022-2024"
+            echo
+            echo "- Requested range: $BACKFILL_START → $BACKFILL_END"
+            echo "- Target leagues: 8"
+            echo "- Calendar windows: $total_windows"
+            echo "- Windows exhausted: $completed_windows"
+            echo "- Windows still partial: $partial_windows"
+            echo "- Fixture rows created: $total_fixture_created"
+            echo "- Fixture rows updated: $total_fixture_updated"
+            echo "- Enriched fixture snapshots completed this run: $total_data_completed"
+            echo "- skip_existing: true"
+            echo "- Max passes per month: $MAX_PASSES_PER_MONTH"
+          } | tee backfill-logs/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload backfill logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-backfill-2022-2024-logs
+          path: backfill-logs/
+          if-no-files-found: warn
+          retention-days: 30
