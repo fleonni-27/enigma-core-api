@@ -14,12 +14,13 @@ from app.probability_calibration import build_probability_calibration_v1
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main_legacy_v014 import app
 from app.model_dataset import build_model_dataset_v1
+from app.prematch_inference import generate_and_persist_prematch_prediction, get_fixture_predictions
 from app.training_dataset_full import build_full_training_dataset
 from app.training_dataset_split import build_temporal_training_split
 from app.training_dataset_v11 import build_training_dataset_v11
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.27.0"
+app.version = "0.28.0"
 
 app.router.routes = [
     route
@@ -457,6 +458,62 @@ def decision_fixture_endpoint(
             max_quote_span_seconds=max_quote_span_seconds,
             require_team_favorite_top_class=require_team_favorite_top_class,
             include_market_candidates=include_market_candidates,
+        )
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.post("/inference/fixture/{sportmonks_fixture_id}")
+def prematch_inference_fixture_endpoint(
+    sportmonks_fixture_id: int,
+    prediction_window: str = Query(default="prematch_v1", min_length=1, max_length=30),
+    history_days: int = Query(default=730, ge=90, le=3650),
+    lookback_matches: int = Query(default=5, ge=1, le=10),
+    min_history_matches: int = Query(default=3, ge=1, le=10),
+    min_training_rows: int = Query(default=120, ge=60, le=5000),
+    max_training_rows: int = Query(default=5000, ge=100, le=5000),
+    class_weight_balanced: bool = False,
+) -> dict:
+    try:
+        result = generate_and_persist_prematch_prediction(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            prediction_window=prediction_window,
+            history_days=history_days,
+            lookback_matches=lookback_matches,
+            min_history_matches=min_history_matches,
+            min_training_rows=min_training_rows,
+            max_training_rows=max_training_rows,
+            class_weight_balanced=class_weight_balanced,
+        )
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/predictions/fixture/{sportmonks_fixture_id}")
+def fixture_predictions_endpoint(
+    sportmonks_fixture_id: int,
+    prediction_window: str | None = Query(default=None, max_length=30),
+    model_version: str | None = Query(default=None, max_length=30),
+) -> dict:
+    try:
+        result = get_fixture_predictions(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            prediction_window=prediction_window,
+            model_version=model_version,
         )
         if result.get("status") == "fixture_not_found":
             raise HTTPException(status_code=404, detail=result)
