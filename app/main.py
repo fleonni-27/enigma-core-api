@@ -8,6 +8,7 @@ from app.baseline_1x2 import build_baseline_1x2_temporal_v1
 from app.baseline_1x2_policy import build_baseline_1x2_confidence_policy_v1
 from app.baseline_1x2_policy_v2 import build_baseline_1x2_confidence_policy_v2
 from app.confidence_calibration import build_confidence_calibration_v1
+from app.decision_engine import evaluate_1x2_quote, evaluate_fixture_decision
 from app.favorite_confidence_calibration import build_favorite_confidence_calibration_v1
 from app.probability_calibration import build_probability_calibration_v1
 from app.historical_controller_v2 import run_historical_controller_v2
@@ -18,7 +19,7 @@ from app.training_dataset_split import build_temporal_training_split
 from app.training_dataset_v11 import build_training_dataset_v11
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.26.0"
+app.version = "0.27.0"
 
 app.router.routes = [
     route
@@ -389,6 +390,79 @@ def favorite_confidence_calibration_v1_endpoint(
             oof_folds=oof_folds,
             min_initial_train_rows=min_initial_train_rows,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/decision/1x2/evaluate")
+def decision_1x2_evaluate_endpoint(
+    p_home: float = Query(..., ge=0.0, le=1.0),
+    p_draw: float = Query(..., ge=0.0, le=1.0),
+    p_away: float = Query(..., ge=0.0, le=1.0),
+    odd_home: float = Query(..., gt=1.0, le=1000.0),
+    odd_draw: float = Query(..., gt=1.0, le=1000.0),
+    odd_away: float = Query(..., gt=1.0, le=1000.0),
+    min_edge: float = Query(default=0.05, ge=0.0, le=0.30),
+    min_expected_value: float = Query(default=0.03, ge=0.0, le=0.50),
+    min_calibrated_confidence: float = Query(default=0.45, ge=0.30, le=0.80),
+    max_overround: float = Query(default=0.12, ge=0.0, le=0.30),
+    require_team_favorite_top_class: bool = True,
+) -> dict:
+    try:
+        return evaluate_1x2_quote(
+            p_home=p_home,
+            p_draw=p_draw,
+            p_away=p_away,
+            odd_home=odd_home,
+            odd_draw=odd_draw,
+            odd_away=odd_away,
+            min_edge=min_edge,
+            min_expected_value=min_expected_value,
+            min_calibrated_confidence=min_calibrated_confidence,
+            max_overround=max_overround,
+            require_team_favorite_top_class=require_team_favorite_top_class,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+@app.get("/decision/fixture/{sportmonks_fixture_id}")
+def decision_fixture_endpoint(
+    sportmonks_fixture_id: int,
+    prediction_window: str | None = Query(default=None, max_length=30),
+    model_version: str | None = Query(default=None, max_length=30),
+    snapshot_window: str | None = Query(default=None, max_length=30),
+    min_edge: float = Query(default=0.05, ge=0.0, le=0.30),
+    min_expected_value: float = Query(default=0.03, ge=0.0, le=0.50),
+    min_calibrated_confidence: float = Query(default=0.45, ge=0.30, le=0.80),
+    max_overround: float = Query(default=0.12, ge=0.0, le=0.30),
+    max_quote_span_seconds: int = Query(default=300, ge=0, le=3600),
+    require_team_favorite_top_class: bool = True,
+    include_market_candidates: bool = False,
+) -> dict:
+    try:
+        result = evaluate_fixture_decision(
+            sportmonks_fixture_id=sportmonks_fixture_id,
+            prediction_window=prediction_window,
+            model_version=model_version,
+            snapshot_window=snapshot_window,
+            min_edge=min_edge,
+            min_expected_value=min_expected_value,
+            min_calibrated_confidence=min_calibrated_confidence,
+            max_overround=max_overround,
+            max_quote_span_seconds=max_quote_span_seconds,
+            require_team_favorite_top_class=require_team_favorite_top_class,
+            include_market_candidates=include_market_candidates,
+        )
+        if result.get("status") == "fixture_not_found":
+            raise HTTPException(status_code=404, detail=result)
+        return result
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
