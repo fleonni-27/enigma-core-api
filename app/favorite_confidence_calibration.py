@@ -142,7 +142,7 @@ def _rolling_origin_oof(
 
     groups = _group_rows_by_timestamp(rows)
     cumulative = 0
-    initial_group_idx = None
+    initial_group_idx: int | None = None
     for idx, group in enumerate(groups):
         cumulative += len(group)
         if cumulative >= min_initial_train_rows:
@@ -153,7 +153,6 @@ def _rolling_origin_oof(
 
     future_groups = groups[initial_group_idx:]
     fold_group_count = max(1, math.ceil(len(future_groups) / oof_folds))
-
     observations: list[dict] = []
     folds: list[dict] = []
     train_groups = groups[:initial_group_idx]
@@ -177,8 +176,7 @@ def _rolling_origin_oof(
         model = _build_base_model(class_weight_balanced)
         model.fit(X_fit, y_fit)
         probabilities = _ordered_probabilities(model, X_pred)
-        fold_observations = _favorite_observations(y_pred, probabilities)
-        observations.extend(fold_observations)
+        observations.extend(_favorite_observations(y_pred, probabilities))
 
         fold_number += 1
         folds.append(
@@ -215,10 +213,7 @@ def _calibration_summary(outcomes: list[int], probabilities: list[float]) -> dic
     if total == 0:
         raise ValueError("calibration summary requires at least one observation")
 
-    buckets = {
-        label: {"rows": 0, "wins": 0, "probability_sum": 0.0}
-        for _, _, label in BIN_DEFINITIONS
-    }
+    buckets = {label: {"rows": 0, "wins": 0, "probability_sum": 0.0} for _, _, label in BIN_DEFINITIONS}
     for outcome, probability in zip(outcomes, probabilities):
         _, _, label = _bin_for_probability(float(probability))
         bucket = buckets[label]
@@ -282,6 +277,34 @@ def _calibration_summary(outcomes: list[int], probabilities: list[float]) -> dic
     }
 
 
+def _delta(raw_summary: dict, calibrated_summary: dict) -> dict:
+    return {
+        "brier_calibrated_minus_raw": round(calibrated_summary["brier_score"] - raw_summary["brier_score"], 6),
+        "ece_calibrated_minus_raw": round(calibrated_summary["expected_calibration_error"] - raw_summary["expected_calibration_error"], 6),
+        "mce_calibrated_minus_raw": round(calibrated_summary["maximum_calibration_error"] - raw_summary["maximum_calibration_error"], 6),
+        "monotonicity_violations_calibrated_minus_raw": calibrated_summary["monotonicity_violations_across_non_empty_bins"] - raw_summary["monotonicity_violations_across_non_empty_bins"],
+        "improved_brier": calibrated_summary["brier_score"] < raw_summary["brier_score"],
+        "improved_ece": calibrated_summary["expected_calibration_error"] < raw_summary["expected_calibration_error"],
+        "improved_mce": calibrated_summary["maximum_calibration_error"] < raw_summary["maximum_calibration_error"],
+    }
+
+
+def _evaluate_partition(model: Pipeline, calibrator: LogisticRegression, rows: list[dict], feature_names: list[str]) -> dict:
+    X, y = _matrix(rows, feature_names)
+    probabilities = _ordered_probabilities(model, X)
+    observations = _favorite_observations(y, probabilities)
+    raw_probabilities = [float(item["favorite_probability"]) for item in observations]
+    outcomes = [int(item["favorite_won"]) for item in observations]
+    calibrated_probabilities = _apply_platt(calibrator, raw_probabilities)
+    raw_summary = _calibration_summary(outcomes, raw_probabilities)
+    calibrated_summary = _calibration_summary(outcomes, calibrated_probabilities)
+    return {
+        "raw": raw_summary,
+        "calibrated": calibrated_summary,
+        "delta": _delta(raw_summary, calibrated_summary),
+    }
+
+
 def build_favorite_confidence_calibration_v1(
     start_date: date,
     end_date: date,
@@ -329,21 +352,14 @@ def build_favorite_confidence_calibration_v1(
     calibrator = _fit_platt(oof_observations)
 
     X_train, y_train = _matrix(train_rows, feature_names)
-    X_validation, y_validation = _matrix(validation_rows, feature_names)
     if set(y_train.tolist()) != set(CLASS_ORDER):
         raise ValueError("train partition must contain all 1X2 classes")
 
     final_model = _build_base_model(class_weight_balanced)
     final_model.fit(X_train, y_train)
-    validation_probabilities = _ordered_probabilities(final_model, X_validation)
-    validation_observations = _favorite_observations(y_validation, validation_probabilities)
 
-    raw_probabilities = [float(item["favorite_probability"]) for item in validation_observations]
-    outcomes = [int(item["favorite_won"]) for item in validation_observations]
-    calibrated_probabilities = _apply_platt(calibrator, raw_probabilities)
-
-    raw_summary = _calibration_summary(outcomes, raw_probabilities)
-    calibrated_summary = _calibration_summary(outcomes, calibrated_probabilities)
+    validation_evaluation = _evaluate_partition(final_model, calibrator, validation_rows, feature_names)
+    test_evaluation = _evaluate_partition(final_model, calibrator, test_rows, feature_names)
 
     coef = float(calibrator.coef_[0][0])
     intercept = float(calibrator.intercept_[0])
@@ -360,6 +376,15 @@ def build_favorite_confidence_calibration_v1(
         "platt_intercept": round(intercept, 10),
     }
     calibration_sha = _stable_hash(metadata)
+
+    validation_pass = bool(
+        validation_evaluation["delta"]["improved_brier"]
+        and validation_evaluation["delta"]["improved_ece"]
+    )
+    test_pass = bool(
+        test_evaluation["delta"]["improved_brier"]
+        and test_evaluation["delta"]["improved_ece"]
+    )
 
     return {
         "status": "ok",
@@ -379,7 +404,7 @@ def build_favorite_confidence_calibration_v1(
             "feature_count": len(feature_names),
             "train_rows": len(train_rows),
             "validation_rows": len(validation_rows),
-            "test_rows_withheld": len(test_rows),
+            "test_rows": len(test_rows),
             "class_weight": "balanced" if class_weight_balanced else None,
             "final_base_model_fit_scope": "full outer train partition only",
         },
@@ -400,24 +425,20 @@ def build_favorite_confidence_calibration_v1(
             "coefficient": round(coef, 6),
             "intercept": round(intercept, 6),
             "fit_scope": "rolling-origin OOF predictions from outer train only",
+            "frozen_before_test_evaluation": True,
         },
-        "validation": {
-            "raw": raw_summary,
-            "calibrated": calibrated_summary,
-            "delta": {
-                "brier_calibrated_minus_raw": round(calibrated_summary["brier_score"] - raw_summary["brier_score"], 6),
-                "ece_calibrated_minus_raw": round(calibrated_summary["expected_calibration_error"] - raw_summary["expected_calibration_error"], 6),
-                "mce_calibrated_minus_raw": round(calibrated_summary["maximum_calibration_error"] - raw_summary["maximum_calibration_error"], 6),
-                "monotonicity_violations_calibrated_minus_raw": calibrated_summary["monotonicity_violations_across_non_empty_bins"] - raw_summary["monotonicity_violations_across_non_empty_bins"],
-                "improved_brier": calibrated_summary["brier_score"] < raw_summary["brier_score"],
-                "improved_ece": calibrated_summary["expected_calibration_error"] < raw_summary["expected_calibration_error"],
-                "improved_mce": calibrated_summary["maximum_calibration_error"] < raw_summary["maximum_calibration_error"],
-            },
-        },
+        "validation": validation_evaluation,
         "test": {
-            "withheld": True,
-            "rows": len(test_rows),
-            "reason": "test remains untouched while the favorite-confidence calibrator is selected and validated",
+            "withheld": False,
+            "opened_for_final_gate": True,
+            **test_evaluation,
+        },
+        "final_gate": {
+            "primary_rule": "Brier and ECE must both improve out-of-sample; MCE is diagnostic because sparse bins can dominate it",
+            "validation_passed_primary_rule": validation_pass,
+            "test_passed_primary_rule": test_pass,
+            "promote_candidate": bool(validation_pass and test_pass),
+            "no_recalibration_after_test": True,
         },
         "policy": {
             "outer_temporal_split_preserved": True,
@@ -427,6 +448,7 @@ def build_favorite_confidence_calibration_v1(
             "test_used_for_fit": False,
             "test_used_for_calibrator_fit": False,
             "test_used_for_threshold_selection": False,
+            "test_used_only_for_final_out_of_sample_evaluation": True,
             "target_match_postgame_data_as_features": False,
             "raw_1x2_probabilities_are_not_rewritten": True,
             "favorite_confidence_is_a_separate_binary_calibration_layer": True,
