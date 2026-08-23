@@ -18,6 +18,10 @@ from app.decision_engine import (
     DEFAULT_MIN_EXPECTED_VALUE,
     evaluate_fixture_decision,
 )
+from app.forward_test_ledger import (
+    persist_evaluated_decision,
+    router as forward_test_router,
+)
 from app.ingestion import ingest_fixtures_payload
 from app.league_registry import canonical_league
 from app.models import Fixture
@@ -42,6 +46,7 @@ MAX_FIXTURES = 5
 DEFAULT_MIN_LEAD_MINUTES = 60
 
 router = APIRouter()
+router.include_router(forward_test_router)
 
 
 def _stable_hash(payload: Any) -> str:
@@ -96,7 +101,9 @@ def _compact_decision(result: dict[str, Any]) -> dict[str, Any]:
         "decision": result.get("decision"),
         "selection": result.get("selection"),
         "reason_codes": list(result.get("reason_codes") or []),
-        "calibrated_favorite_confidence": decision_calibration.get("calibrated_favorite_confidence"),
+        "calibrated_favorite_confidence": decision_calibration.get(
+            "calibrated_favorite_confidence"
+        ),
         "best_market": {
             "bookmaker": best_market.get("bookmaker"),
             "market_name": best_market.get("market_name"),
@@ -106,12 +113,26 @@ def _compact_decision(result: dict[str, Any]) -> dict[str, Any]:
             "edge_percentage_points": value.get("edge_percentage_points"),
             "expected_value_pct": value.get("expected_value_pct"),
             "latest_quote_fetched_at": best_market.get("latest_quote_fetched_at"),
-        } if best_market else None,
+        }
+        if best_market
+        else None,
         "market_scan": {
             "odds_rows_considered": scan.get("odds_rows_considered"),
             "complete_candidate_markets": scan.get("complete_candidate_markets"),
             "rejected_market_groups": scan.get("rejected_market_groups"),
         },
+    }
+
+
+def _compact_ledger(result: dict[str, Any]) -> dict[str, Any]:
+    record = result.get("record") or {}
+    return {
+        "status": result.get("status"),
+        "version": result.get("version"),
+        "reason_codes": list(result.get("reason_codes") or []),
+        "record_id": record.get("record_id"),
+        "record_key": record.get("record_key"),
+        "recorded_at": record.get("recorded_at"),
     }
 
 
@@ -144,7 +165,9 @@ async def run_future_batch(
         raise ValueError("min_lead_minutes must be between 0 and 1440")
     if len(str(prediction_window or "")) < 1 or len(str(prediction_window)) > 30:
         raise ValueError("prediction_window must contain 1 to 30 characters")
-    if snapshot_window is not None and (len(snapshot_window) < 1 or len(snapshot_window) > 30):
+    if snapshot_window is not None and (
+        len(snapshot_window) < 1 or len(snapshot_window) > 30
+    ):
         raise ValueError("snapshot_window must contain 1 to 30 characters when supplied")
 
     requested_keys = _requested_league_keys(leagues)
@@ -185,10 +208,7 @@ async def run_future_batch(
     with SessionLocal() as session:
         candidates = session.scalars(
             select(Fixture)
-            .where(
-                Fixture.starts_at >= cutoff,
-                Fixture.starts_at <= end_dt,
-            )
+            .where(Fixture.starts_at >= cutoff, Fixture.starts_at <= end_dt)
             .order_by(Fixture.starts_at.asc(), Fixture.id.asc())
         ).all()
 
@@ -216,6 +236,7 @@ async def run_future_batch(
             "inference": None,
             "odds": None,
             "decision": None,
+            "ledger": None,
         }
 
         try:
@@ -248,10 +269,7 @@ async def run_future_batch(
         except Exception as exc:
             counts["failed"] += 1
             reason_counts["INFERENCE_EXCEPTION"] += 1
-            item["inference"] = {
-                "status": "failed",
-                "error": exc.__class__.__name__,
-            }
+            item["inference"] = {"status": "failed", "error": exc.__class__.__name__}
             items.append(item)
             continue
 
@@ -308,8 +326,32 @@ async def run_future_batch(
                     counts["bet"] += 1
                 elif decision_value == "NO_BET":
                     counts["no_bet"] += 1
+
+                try:
+                    ledger_result = persist_evaluated_decision(
+                        decision,
+                        source=FUTURE_BATCH_VERSION,
+                    )
+                    item["ledger"] = _compact_ledger(ledger_result)
+                    ledger_status = ledger_result.get("status")
+                    if ledger_status == "persisted":
+                        counts["ledger_persisted"] += 1
+                    elif ledger_status == "exists":
+                        counts["ledger_existing"] += 1
+                    else:
+                        counts["ledger_not_persisted"] += 1
+                        for reason in ledger_result.get("reason_codes") or []:
+                            reason_counts[str(reason)] += 1
+                except Exception as exc:
+                    counts["ledger_failed"] += 1
+                    reason_counts["LEDGER_PERSISTENCE_EXCEPTION"] += 1
+                    item["ledger"] = {
+                        "status": "failed",
+                        "error": exc.__class__.__name__,
+                    }
             else:
                 counts["decision_not_ready"] += 1
+
             for reason in compact.get("reason_codes") or []:
                 reason_counts[str(reason)] += 1
         except Exception as exc:
@@ -373,6 +415,10 @@ async def run_future_batch(
             "bet": counts["bet"],
             "no_bet": counts["no_bet"],
             "decision_not_ready": counts["decision_not_ready"],
+            "ledger_persisted": counts["ledger_persisted"],
+            "ledger_existing": counts["ledger_existing"],
+            "ledger_not_persisted": counts["ledger_not_persisted"],
+            "ledger_failed": counts["ledger_failed"],
             "failed": counts["failed"],
             "reason_code_counts": dict(sorted(reason_counts.items())),
         },
@@ -387,6 +433,8 @@ async def run_future_batch(
             "prediction_immutability_preserved": True,
             "dynamic_snapshot_window_prevents_stale_odds_reuse": snapshot_window is None,
             "decision_thresholds_are_initial_not_test_optimized": True,
+            "decision_persistence_enabled": True,
+            "forward_test_records_immutable": True,
             "max_batch_size": MAX_FIXTURES,
         },
     }
