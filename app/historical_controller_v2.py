@@ -46,16 +46,22 @@ async def run_historical_controller_v2(
         incomplete = int(checkpoint.get("incomplete_snapshots", 0) or 0)
         exhausted = bool(checkpoint.get("batch_exhausted"))
         truncated = bool(checkpoint.get("report_truncated_or_at_limit"))
+        fixture_totals = (month.get("fixtures") or {}).get("totals") or {}
+        fixture_failed_days = int(fixture_totals.get("failed_days", 0) or 0)
+        fixture_collection_complete = (not ingest_fixtures) or fixture_failed_days == 0
 
         unresolved_incomplete = max(0, incomplete - upstream_exceptions)
         dataset_complete = missing == 0 and incomplete == 0 and not truncated
         collection_complete = (
-            exhausted
+            fixture_collection_complete
+            and exhausted
             and missing == 0
             and unresolved_incomplete == 0
             and not truncated
         )
 
+        checkpoint["fixture_failed_days"] = fixture_failed_days
+        checkpoint["fixture_collection_complete"] = fixture_collection_complete
         checkpoint["upstream_exceptions"] = upstream_exceptions
         checkpoint["unresolved_incomplete_snapshots"] = unresolved_incomplete
         checkpoint["dataset_complete"] = dataset_complete
@@ -72,7 +78,7 @@ async def run_historical_controller_v2(
     result["policy"] = {
         **(result.get("policy") or {}),
         "dataset_complete_definition": "no missing snapshots, no incomplete snapshots, and audit not truncated",
-        "collection_complete_definition": "no pending snapshots and all incomplete snapshots are formally quarantined as upstream unavailable",
+        "collection_complete_definition": "fixture collection has no failed days, no pending snapshots, and all incomplete snapshots are formally quarantined as upstream unavailable",
         "upstream_exception_training_eligible": False,
         "upstream_exception_profile_remains": "INCOMPLETE",
     }
