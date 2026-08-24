@@ -31,8 +31,8 @@ from app.training_dataset_v11 import (
 FULL_DATASET_VERSION = "training_dataset_full_v1"
 MAX_FULL_DATASET_ROWS = 5000
 
-# Lazy request/task-local memoization. The cache is not shared across
-# independent requests, so dataset freshness between batch runs is preserved.
+# Request/task-local memoization. Only one complete dataset is retained at a
+# time so a multi-fixture batch cannot accumulate several large row payloads.
 _request_dataset_cache: ContextVar[dict[str, Any] | None] = ContextVar(
     "full_training_dataset_request_cache",
     default=None,
@@ -71,23 +71,6 @@ def request_local_dataset_cache_stats() -> dict[str, int]:
     }
 
 
-def _latest_snapshot_cached(
-    session,
-    fixture_id: int,
-    snapshot_cache: dict[int, FixtureDataSnapshot | None],
-) -> FixtureDataSnapshot | None:
-    if fixture_id in snapshot_cache:
-        return snapshot_cache[fixture_id]
-    snapshot = session.scalar(
-        select(FixtureDataSnapshot)
-        .where(FixtureDataSnapshot.fixture_id == fixture_id)
-        .order_by(FixtureDataSnapshot.fetched_at.desc(), FixtureDataSnapshot.id.desc())
-        .limit(1)
-    )
-    snapshot_cache[fixture_id] = snapshot
-    return snapshot
-
-
 def _profile_cached(
     fixture: Fixture,
     profile_cache: dict[int, dict[str, Any]],
@@ -96,45 +79,35 @@ def _profile_cached(
     cached = profile_cache.get(sportmonks_id)
     if cached is not None:
         return cached
-    profile = classify_fixture_feature_profile(sportmonks_id)
-    profile_cache[sportmonks_id] = profile
-    return profile
+
+    classification = classify_fixture_feature_profile(sportmonks_id)
+    # Retain only fields consumed by this builder; the full quality payload can
+    # be substantially larger and provides no value after classification.
+    compact = {
+        "profile": str(classification.get("profile") or ""),
+        "training_eligible": bool(classification.get("training_eligible")),
+    }
+    profile_cache[sportmonks_id] = compact
+    return compact
 
 
-def _fixture_side_observation_cached(
-    session,
+def _observation_from_payload(
     fixture: Fixture,
+    *,
     team_name: str,
-    snapshot_cache: dict[int, FixtureDataSnapshot | None],
-    observation_cache: dict[tuple[int, str], dict[str, Any] | None],
+    statistics: list[Any],
+    xg_rows: list[Any],
 ) -> dict[str, Any] | None:
-    key = (int(fixture.id), str(team_name))
-    if key in observation_cache:
-        return observation_cache[key]
-
-    snapshot = _latest_snapshot_cached(session, int(fixture.id), snapshot_cache)
-    if snapshot is None:
-        observation_cache[key] = None
-        return None
-
-    statistics = _as_list(snapshot.statistics)
-    xg_rows = _as_list(snapshot.xg)
-    if not statistics:
-        observation_cache[key] = None
-        return None
-
     if fixture.home_team == team_name:
         side, opponent_side = "home", "away"
     elif fixture.away_team == team_name:
         side, opponent_side = "away", "home"
     else:
-        observation_cache[key] = None
         return None
 
     goals_for = _stat_value(statistics, STAT_NAMES["goals"], side)
     goals_against = _stat_value(statistics, STAT_NAMES["goals"], opponent_side)
     if goals_for is None or goals_against is None:
-        observation_cache[key] = None
         return None
 
     if goals_for > goals_against:
@@ -147,13 +120,15 @@ def _fixture_side_observation_cached(
         points = 0.0
         result = "L"
 
-    observation = {
+    return {
         "starts_at": fixture.starts_at,
         "points": points,
         "result": result,
         "goals_for": goals_for,
         "goals_against": goals_against,
-        "shots_total_for": _stat_value(statistics, STAT_NAMES["shots_total"], side),
+        "shots_total_for": _stat_value(
+            statistics, STAT_NAMES["shots_total"], side
+        ),
         "shots_on_target_for": _stat_value(
             statistics, STAT_NAMES["shots_on_target"], side
         ),
@@ -164,8 +139,88 @@ def _fixture_side_observation_cached(
         ),
         "xg_for": _xg_value(xg_rows, statistics, side),
     }
-    observation_cache[key] = observation
-    return observation
+
+
+def _fixture_feature_payload_cached(
+    session,
+    fixture: Fixture,
+    feature_payload_cache: dict[int, dict[str, Any]],
+) -> dict[str, Any]:
+    fixture_id = int(fixture.id)
+    cached = feature_payload_cache.get(fixture_id)
+    if cached is not None:
+        return cached
+
+    snapshot_row = session.execute(
+        select(
+            FixtureDataSnapshot.statistics,
+            FixtureDataSnapshot.xg,
+        )
+        .where(FixtureDataSnapshot.fixture_id == fixture_id)
+        .order_by(FixtureDataSnapshot.fetched_at.desc(), FixtureDataSnapshot.id.desc())
+        .limit(1)
+    ).first()
+
+    if snapshot_row is None:
+        payload = {"label": None, "observations": {}}
+        feature_payload_cache[fixture_id] = payload
+        return payload
+
+    statistics = _as_list(snapshot_row[0])
+    xg_rows = _as_list(snapshot_row[1])
+    if not statistics:
+        payload = {"label": None, "observations": {}}
+        feature_payload_cache[fixture_id] = payload
+        return payload
+
+    home_goals = _stat_value(statistics, STAT_NAMES["goals"], "home")
+    away_goals = _stat_value(statistics, STAT_NAMES["goals"], "away")
+    label = None
+    if home_goals is not None and away_goals is not None:
+        if home_goals > away_goals:
+            outcome = "1"
+        elif home_goals == away_goals:
+            outcome = "X"
+        else:
+            outcome = "2"
+        total_goals = home_goals + away_goals
+        label = {
+            "outcome_1x2": outcome,
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "total_goals": total_goals,
+            "btts": bool(home_goals > 0 and away_goals > 0),
+            "over_2_5": bool(total_goals > 2.5),
+        }
+
+    observations: dict[str, dict[str, Any] | None] = {}
+    for team_name in (fixture.home_team, fixture.away_team):
+        observations[str(team_name)] = _observation_from_payload(
+            fixture,
+            team_name=str(team_name),
+            statistics=statistics,
+            xg_rows=xg_rows,
+        )
+
+    # Only compact derived values remain referenced after this function. The
+    # raw snapshot JSON and ORM object are not retained by the build cache.
+    payload = {"label": label, "observations": observations}
+    feature_payload_cache[fixture_id] = payload
+    return payload
+
+
+def _fixture_side_observation_cached(
+    session,
+    fixture: Fixture,
+    team_name: str,
+    feature_payload_cache: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    payload = _fixture_feature_payload_cached(
+        session,
+        fixture,
+        feature_payload_cache,
+    )
+    return (payload.get("observations") or {}).get(str(team_name))
 
 
 def _team_fixture_candidates_cached(
@@ -207,8 +262,7 @@ def _team_history_cached(
     *,
     team_fixture_cache: dict[str, list[Fixture]],
     profile_cache: dict[int, dict[str, Any]],
-    snapshot_cache: dict[int, FixtureDataSnapshot | None],
-    observation_cache: dict[tuple[int, str], dict[str, Any] | None],
+    feature_payload_cache: dict[int, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     candidates = _team_fixture_candidates_cached(
         session,
@@ -230,8 +284,7 @@ def _team_history_cached(
             session,
             fixture,
             team_name,
-            snapshot_cache,
-            observation_cache,
+            feature_payload_cache,
         )
         if observation is None:
             continue
@@ -244,32 +297,14 @@ def _team_history_cached(
 def _target_label_cached(
     session,
     fixture: Fixture,
-    snapshot_cache: dict[int, FixtureDataSnapshot | None],
+    feature_payload_cache: dict[int, dict[str, Any]],
 ) -> dict[str, Any] | None:
-    snapshot = _latest_snapshot_cached(session, int(fixture.id), snapshot_cache)
-    if snapshot is None:
-        return None
-    statistics = _as_list(snapshot.statistics)
-    home_goals = _stat_value(statistics, STAT_NAMES["goals"], "home")
-    away_goals = _stat_value(statistics, STAT_NAMES["goals"], "away")
-    if home_goals is None or away_goals is None:
-        return None
-
-    if home_goals > away_goals:
-        outcome = "1"
-    elif home_goals == away_goals:
-        outcome = "X"
-    else:
-        outcome = "2"
-    total_goals = home_goals + away_goals
-    return {
-        "outcome_1x2": outcome,
-        "home_goals": home_goals,
-        "away_goals": away_goals,
-        "total_goals": total_goals,
-        "btts": bool(home_goals > 0 and away_goals > 0),
-        "over_2_5": bool(total_goals > 2.5),
-    }
+    payload = _fixture_feature_payload_cached(
+        session,
+        fixture,
+        feature_payload_cache,
+    )
+    return payload.get("label")
 
 
 def _build_row_cached(
@@ -280,8 +315,7 @@ def _build_row_cached(
     *,
     team_fixture_cache: dict[str, list[Fixture]],
     profile_cache: dict[int, dict[str, Any]],
-    snapshot_cache: dict[int, FixtureDataSnapshot | None],
-    observation_cache: dict[tuple[int, str], dict[str, Any] | None],
+    feature_payload_cache: dict[int, dict[str, Any]],
 ) -> tuple[dict | None, str | None, dict | None]:
     canonical = canonical_league(fixture.league_name)
     league_key = canonical.get("key")
@@ -299,7 +333,7 @@ def _build_row_cached(
             training_eligible=bool(classification.get("training_eligible")),
         )
 
-    label = _target_label_cached(session, fixture, snapshot_cache)
+    label = _target_label_cached(session, fixture, feature_payload_cache)
     if label is None:
         return None, "missing_label", _skip_detail(fixture, "missing_label")
 
@@ -311,8 +345,7 @@ def _build_row_cached(
         lookback_matches,
         team_fixture_cache=team_fixture_cache,
         profile_cache=profile_cache,
-        snapshot_cache=snapshot_cache,
-        observation_cache=observation_cache,
+        feature_payload_cache=feature_payload_cache,
     )
     away_history = _team_history_cached(
         session,
@@ -322,8 +355,7 @@ def _build_row_cached(
         lookback_matches,
         team_fixture_cache=team_fixture_cache,
         profile_cache=profile_cache,
-        snapshot_cache=snapshot_cache,
-        observation_cache=observation_cache,
+        feature_payload_cache=feature_payload_cache,
     )
     if len(home_history) < min_history_matches or len(away_history) < min_history_matches:
         return None, "insufficient_history", _skip_detail(
@@ -438,7 +470,11 @@ def build_full_training_dataset(
     if cached is not None:
         cache_state["hits"] = int(cache_state.get("hits") or 0) + 1
         return cached
+
     cache_state["misses"] = int(cache_state.get("misses") or 0) + 1
+    # Chronological future batches only benefit from the immediately reusable
+    # dataset. Drop older full row payloads before constructing another one.
+    datasets.clear()
 
     start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
@@ -466,8 +502,7 @@ def build_full_training_dataset(
 
         team_fixture_cache: dict[str, list[Fixture]] = {}
         profile_cache: dict[int, dict[str, Any]] = {}
-        snapshot_cache: dict[int, FixtureDataSnapshot | None] = {}
-        observation_cache: dict[tuple[int, str], dict[str, Any] | None] = {}
+        feature_payload_cache: dict[int, dict[str, Any]] = {}
 
         for fixture in candidates:
             canonical = canonical_league(fixture.league_name)
@@ -490,8 +525,7 @@ def build_full_training_dataset(
                 min_history_matches,
                 team_fixture_cache=team_fixture_cache,
                 profile_cache=profile_cache,
-                snapshot_cache=snapshot_cache,
-                observation_cache=observation_cache,
+                feature_payload_cache=feature_payload_cache,
             )
             if row is None:
                 if reason:
@@ -518,10 +552,11 @@ def build_full_training_dataset(
 
         build_performance = {
             "cache_scope": "single_dataset_build",
+            "request_dataset_cache_max_entries": 1,
             "team_fixture_lists_cached": len(team_fixture_cache),
             "fixture_profiles_cached": len(profile_cache),
-            "latest_snapshots_cached": len(snapshot_cache),
-            "side_observations_cached": len(observation_cache),
+            "fixture_feature_payloads_cached": len(feature_payload_cache),
+            "raw_snapshot_objects_retained": False,
             "history_candidate_semantics": (
                 "filter starts_at before target, then apply original candidate limit"
             ),
@@ -610,6 +645,8 @@ def build_full_training_dataset(
             "deterministic_order": "starts_at ASC, fixture_id ASC",
             "dataset_hash_algorithm": "sha256",
             "build_caches_do_not_change_dataset_hash": True,
+            "raw_snapshot_objects_retained_by_build_cache": False,
+            "request_dataset_cache_is_memory_bounded": True,
         },
     }
     if include_skipped_details:
