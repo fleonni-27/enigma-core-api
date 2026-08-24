@@ -8,6 +8,8 @@ on:
       - "app/daily_prediction_runner_v2.py"
       - "app/dashboard_operations_v2_bulk.py"
       - "app/dashboard_operations_v2_health.py"
+      - "app/db_query_plan_audit.py"
+      - "app/db_release.py"
       - "app/decision_engine_v2.py"
       - "app/inference_runtime_v2.py"
       - "app/inference_fit_cache.py"
@@ -20,10 +22,13 @@ on:
       - "app/main_v016.py"
       - "app/main_v017.py"
       - "app/sportmonks.py"
+      - "migrations/**"
+      - "alembic.ini"
       - "requirements.txt"
       - "render.yaml"
       - "tests/test_dashboard_operations_v2_bulk.py"
       - "tests/test_dashboard_operations_v2_health_chain.py"
+      - "tests/test_db_performance_migrations.py"
       - "tests/test_internal_endpoint_auth.py"
       - "tests/test_j1_hardening.py"
       - "tests/test_j1_pending_selector_v2.py"
@@ -52,6 +57,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Compile application
-        run: python -m compileall -q app
+        run: python -m compileall -q app migrations
+      - name: Validate Alembic migration chain
+        run: alembic upgrade head
       - name: Run J1 hardening and scale tests
-        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_performance_scale_v1 -v
+        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_db_performance_migrations tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_performance_scale_v1 -v

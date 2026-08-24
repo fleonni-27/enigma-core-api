@@ -5,6 +5,9 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
+    # Apply Alembic migrations and capture bounded before/after EXPLAIN ANALYZE
+    # plans before the new web version receives traffic.
+    preDeployCommand: python -m app.db_release
     startCommand: uvicorn app.main_v017:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
