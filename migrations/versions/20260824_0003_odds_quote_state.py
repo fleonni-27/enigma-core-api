@@ -26,6 +26,15 @@ INDEX_COLUMNS = (
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    # The migration chain CI intentionally runs against an empty SQLite DB: the
+    # legacy application tables predate Alembic and are not created by revisions
+    # 0001/0002. Production is PostgreSQL and must already have odds_snapshots.
+    if not sa.inspect(bind).has_table("odds_snapshots"):
+        if bind.dialect.name == "postgresql":
+            raise RuntimeError("odds_snapshots table is required before revision 0003")
+        return
+
     op.add_column(
         "odds_snapshots",
         sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=True),
@@ -48,7 +57,6 @@ def upgrade() -> None:
         "WHERE first_seen_at IS NULL"
     )
 
-    bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         context = op.get_context()
         with context.autocommit_block():
@@ -76,6 +84,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    if not sa.inspect(bind).has_table("odds_snapshots"):
+        return
+
     if bind.dialect.name == "postgresql":
         context = op.get_context()
         with context.autocommit_block():
