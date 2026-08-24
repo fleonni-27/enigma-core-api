@@ -17,7 +17,7 @@ from app.db_query_plan_audit import (
     summarize_comparison,
 )
 
-DB_RELEASE_VERSION = "db_release_v1_1"
+DB_RELEASE_VERSION = "db_release_v1_2"
 BASELINE_REVISION = "20260824_0001"
 INDEX_REVISION = "20260824_0002"
 DB_RELEASE_ADVISORY_LOCK_KEY = 45002642
@@ -130,7 +130,12 @@ def _run_release_unlocked() -> dict[str, Any]:
         "comparison": summarize_comparison(before, after),
         "policy": {
             "schema_changes_managed_by_alembic": True,
-            "production_indexes_created_concurrently": True,
+            "production_index_build_mode": "bounded_regular_resumable",
+            "production_indexes_created_concurrently": False,
+            "index_lock_timeout_seconds": 30,
+            "index_statement_timeout_seconds": 300,
+            "invalid_interrupted_indexes_repaired": True,
+            "completed_indexes_survive_interrupted_release": True,
             "explain_analyze_is_read_only": True,
             "before_after_plans_persisted": True,
             "migration_failure_blocks_release": True,
