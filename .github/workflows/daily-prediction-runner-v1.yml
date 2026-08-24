@@ -9,6 +9,10 @@ on:
     - cron: "*/15 10-23 * * *"
     - cron: "*/15 0-2 * * *"
 
+concurrency:
+  group: daily-prediction-runner-v1
+  cancel-in-progress: false
+
 jobs:
   j1:
     runs-on: ubuntu-latest
