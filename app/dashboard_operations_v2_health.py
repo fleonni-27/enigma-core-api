@@ -6,7 +6,7 @@ from typing import Any
 from app import dashboard_operations_v2 as dashboard_module
 from app.j1_scheduler import J1_HEARTBEAT_STALE_MINUTES, latest_j1_run
 
-DASHBOARD_OPERATIONS_V2_HEALTH_VERSION = "dashboard_operations_v2_2"
+DASHBOARD_OPERATIONS_V2_HEALTH_VERSION = "dashboard_operations_v2_3"
 _installed = False
 _original_builder = dashboard_module.build_dashboard_operations_v2
 
@@ -30,7 +30,7 @@ def _scheduler_payload(now: datetime) -> dict[str, Any]:
             "selected_fixtures": 0,
             "counts": {},
             "error": None,
-            "expected_cadence_minutes": 10,
+            "expected_cadence_minutes": 1,
             "stale_after_minutes": J1_HEARTBEAT_STALE_MINUTES,
         }
 
@@ -60,7 +60,7 @@ def _scheduler_payload(now: datetime) -> dict[str, Any]:
         "selected_fixtures": int(run.selected_fixtures or 0),
         "counts": dict(run.counts or {}),
         "error": run.error,
-        "expected_cadence_minutes": 10,
+        "expected_cadence_minutes": 1,
         "stale_after_minutes": J1_HEARTBEAT_STALE_MINUTES,
     }
 
@@ -77,6 +77,9 @@ def _build_with_scheduler_health(*, target_date=None) -> dict[str, Any]:
     payload.setdefault("policy", {})["dashboard_refresh_does_not_trigger_j1"] = True
     payload["policy"]["j1_scheduler_heartbeat_persisted"] = True
     payload["policy"]["degraded_runner_state_is_visible"] = True
+    payload["policy"]["j1_auto_publish_after_window_opens"] = True
+    payload["policy"]["primary_scheduler_cadence_minutes"] = 1
+    payload["policy"]["dashboard_auto_refresh_seconds"] = 60
     return payload
 
 
@@ -85,6 +88,7 @@ def _patch_html(html: str) -> str:
         "grid-template-columns:repeat(5,minmax(0,1fr))",
         "grid-template-columns:repeat(6,minmax(0,1fr))",
     )
+    html = html.replace("J1 DISPONÍVEL", "J1 AGUARDANDO PROCESSAMENTO")
     old = "<div class=\"metric\"><div class=\"label\">Próxima J1</div><div style=\"margin-top:7px;font-weight:700\">${next}</div></div></div><div class=\"matches\">"
     new = (
         "<div class=\"metric\"><div class=\"label\">Próxima J1</div><div style=\"margin-top:7px;font-weight:700\">${next}</div></div>"
