@@ -24,7 +24,9 @@ services:
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.j1_scheduler
-    schedule: "*/10 * * * *"
+    # Primary J1 scheduler. The backend itself enforces kickoff-45m and never runs early.
+    # Minute cadence means a newly opened J1 is normally picked up within ~1 minute.
+    schedule: "* * * * *"
     envVars:
       - key: APP_ENV
         value: production
