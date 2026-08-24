@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
-from app import daily_prediction_runner as runner_module
+from app import daily_prediction_runner_v2 as runner_module
 
 _installed = False
 

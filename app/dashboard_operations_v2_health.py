@@ -6,7 +6,7 @@ from typing import Any
 from app import dashboard_operations_v2 as dashboard_module
 from app.j1_scheduler import J1_HEARTBEAT_STALE_MINUTES, latest_j1_run
 
-DASHBOARD_OPERATIONS_V2_HEALTH_VERSION = "dashboard_operations_v2_1"
+DASHBOARD_OPERATIONS_V2_HEALTH_VERSION = "dashboard_operations_v2_2"
 _installed = False
 _original_builder = dashboard_module.build_dashboard_operations_v2
 
@@ -40,6 +40,10 @@ def _scheduler_payload(now: datetime) -> dict[str, Any]:
         health = "FAILED"
     elif age_minutes > J1_HEARTBEAT_STALE_MINUTES:
         health = "STALE"
+    elif run.status == "DEGRADED":
+        health = "DEGRADED"
+    elif run.status == "REVIEW":
+        health = "REVIEW"
     elif run.status == "SKIPPED_LOCKED":
         health = "HEALTHY_LOCKED"
     else:
@@ -72,6 +76,7 @@ def _build_with_scheduler_health(*, target_date=None) -> dict[str, Any]:
     payload["overview"]["scheduler_last_run_at"] = scheduler.get("started_at")
     payload.setdefault("policy", {})["dashboard_refresh_does_not_trigger_j1"] = True
     payload["policy"]["j1_scheduler_heartbeat_persisted"] = True
+    payload["policy"]["degraded_runner_state_is_visible"] = True
     return payload
 
 
