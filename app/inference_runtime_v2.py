@@ -9,15 +9,21 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app import prematch_inference as inference_v1
 from app.database import SessionLocal
+from app.inference_fit_cache import (
+    DEFAULT_MAX_FIT_CACHE_ENTRIES,
+    FIT_CACHE_VERSION,
+    TrainingFitCache,
+)
 from app.league_registry import TARGET_LEAGUES, canonical_league
 from app.model_dataset import STANDARD_FEATURES, _flatten_standard
 from app.models import Fixture, Prediction
-from app import prematch_inference as inference_v1
 from app.training_dataset_full import build_full_training_dataset
 
-INFERENCE_RUNTIME_VERSION = "inference_runtime_v2"
+INFERENCE_RUNTIME_VERSION = "inference_runtime_v2_fit_cache_v1"
 MAX_RUNTIME_DATASETS = 2
+MAX_RUNTIME_FITS = DEFAULT_MAX_FIT_CACHE_ENTRIES
 
 
 @dataclass
@@ -33,12 +39,11 @@ class _PreparedDataset:
 
 
 class InferenceRuntimeV2:
-    """Cycle-local inference runtime that reuses prepared historical rows.
+    """Cycle-local inference runtime with dataset and fitted-model reuse.
 
-    The runtime preserves the V1 model, target features, chronological cutoff,
-    training hash and persistence semantics. It only removes repeated work:
-    within one J1 cycle, fixtures that resolve to the same historical date
-    window share one full dataset build and one flatten/parse pass.
+    Historical datasets are reused by exact date window. Fitted estimators are
+    reused only when the immutable V1 training SHA and pipeline signature are
+    identical. Target features and strict chronological cutoffs remain per fixture.
     """
 
     def __init__(
@@ -74,16 +79,18 @@ class InferenceRuntimeV2:
             if item.get("canonical_name")
         ]
         self._datasets: dict[tuple[str, str], _PreparedDataset] = {}
+        self._fit_cache = TrainingFitCache(
+            class_weight_balanced=self.class_weight_balanced,
+            max_entries=MAX_RUNTIME_FITS,
+        )
         self._stats: dict[str, float | int] = {
             "dataset_builds": 0,
             "dataset_reuses": 0,
             "training_views": 0,
-            "fit_calls": 0,
             "predictions_persisted": 0,
             "predictions_reused": 0,
             "prepared_rows_total": 0,
             "dataset_build_seconds": 0.0,
-            "fit_seconds": 0.0,
         }
 
     @staticmethod
@@ -210,6 +217,20 @@ class InferenceRuntimeV2:
             },
         }
 
+    def _fit_and_predict_cached(
+        self,
+        *,
+        training_rows: list[dict[str, Any]],
+        training_audit: dict[str, Any],
+        target_features: dict[str, float | None],
+    ) -> tuple[dict[str, float], dict[str, Any], dict[str, Any]]:
+        training_sha256 = str(training_audit.get("training_sha256") or "")
+        return self._fit_cache.predict(
+            training_rows=training_rows,
+            training_sha256=training_sha256,
+            target_features=target_features,
+        )
+
     def generate_and_persist_prediction(
         self,
         *,
@@ -314,15 +335,11 @@ class InferenceRuntimeV2:
                 },
             }
 
-        fit_started = perf_counter()
-        probabilities, model_metadata = inference_v1._fit_and_predict(
-            training_rows,
-            target_features,
-            self.class_weight_balanced,
+        probabilities, model_metadata, fit_cache_audit = self._fit_and_predict_cached(
+            training_rows=training_rows,
+            training_audit=training_audit,
+            target_features=target_features,
         )
-        fit_seconds = perf_counter() - fit_started
-        self._stats["fit_calls"] = int(self._stats["fit_calls"]) + 1
-        self._stats["fit_seconds"] = round(float(self._stats["fit_seconds"]) + fit_seconds, 6)
 
         with SessionLocal() as session:
             fixture = session.scalar(
@@ -342,6 +359,7 @@ class InferenceRuntimeV2:
                     "runtime_version": INFERENCE_RUNTIME_VERSION,
                     "reason_codes": ["FIXTURE_STARTED_DURING_INFERENCE"],
                     "fixture": inference_v1._fixture_payload(fixture),
+                    "training_audit": {**training_audit, "fit_cache": fit_cache_audit},
                     "policy": {
                         "prediction_persisted": False,
                         "audit_integrity_protected": True,
@@ -365,7 +383,7 @@ class InferenceRuntimeV2:
                     "runtime_version": INFERENCE_RUNTIME_VERSION,
                     "fixture": inference_v1._fixture_payload(fixture),
                     "prediction": inference_v1._prediction_payload(existing),
-                    "training_audit": training_audit,
+                    "training_audit": {**training_audit, "fit_cache": fit_cache_audit},
                     "policy": {
                         "prediction_immutable_once_persisted": True,
                         "recomputed": False,
@@ -404,7 +422,7 @@ class InferenceRuntimeV2:
                     "runtime_version": INFERENCE_RUNTIME_VERSION,
                     "fixture": inference_v1._fixture_payload(fixture),
                     "prediction": inference_v1._prediction_payload(existing),
-                    "training_audit": training_audit,
+                    "training_audit": {**training_audit, "fit_cache": fit_cache_audit},
                     "policy": {
                         "prediction_immutable_once_persisted": True,
                         "concurrent_insert_resolved": True,
@@ -428,7 +446,7 @@ class InferenceRuntimeV2:
             "training_audit": {
                 **training_audit,
                 "minimum_required": self.min_training_rows,
-                "fit_seconds": round(fit_seconds, 6),
+                "fit_cache": fit_cache_audit,
             },
             "probability_audit": {
                 "sum": round(sum(probabilities.values()), 12),
@@ -451,11 +469,14 @@ class InferenceRuntimeV2:
                 "family": "STANDARD",
                 "decision_engine_compatible": True,
                 "historical_dataset_reused_within_j1_cycle": True,
-                "model_fit_reused_across_distinct_cutoffs": False,
+                "model_fit_reused_only_for_identical_training_sha256": True,
+                "model_fit_reused_across_distinct_training_sha256": False,
+                "target_features_never_cached_with_fit": True,
             },
         }
 
     def audit(self) -> dict[str, Any]:
+        fit_cache = self._fit_cache.audit()
         return {
             "version": INFERENCE_RUNTIME_VERSION,
             "dataset_cache_entries": len(self._datasets),
@@ -463,18 +484,27 @@ class InferenceRuntimeV2:
             "dataset_builds": int(self._stats["dataset_builds"]),
             "dataset_reuses": int(self._stats["dataset_reuses"]),
             "training_views": int(self._stats["training_views"]),
-            "fit_calls": int(self._stats["fit_calls"]),
+            "fit_calls": int(fit_cache["fit_builds"]),
+            "fit_reuses": int(fit_cache["fit_reuses"]),
+            "fit_cache_hits": int(fit_cache["cache_hits"]),
+            "fit_cache_misses": int(fit_cache["cache_misses"]),
+            "fit_cache_entries": int(fit_cache["entries"]),
+            "fit_cache_max_entries": int(fit_cache["max_entries"]),
             "predictions_persisted": int(self._stats["predictions_persisted"]),
             "predictions_reused": int(self._stats["predictions_reused"]),
             "prepared_rows_total": int(self._stats["prepared_rows_total"]),
             "dataset_build_seconds": round(float(self._stats["dataset_build_seconds"]), 6),
-            "fit_seconds": round(float(self._stats["fit_seconds"]), 6),
+            "fit_seconds": round(float(fit_cache["fit_seconds"]), 6),
+            "fit_cache": fit_cache,
             "policy": {
                 "scope": "single_j1_cycle",
-                "reuse_unit": "historical_dataset_and_flattened_rows",
+                "reuse_unit": "historical_dataset_flattened_rows_and_fit_by_training_sha256",
                 "per_fixture_target_features_preserved": True,
                 "per_fixture_strict_temporal_cutoff_preserved": True,
                 "training_hash_semantics_preserved": True,
+                "fit_cache_version": FIT_CACHE_VERSION,
+                "fit_cache_requires_identical_training_sha256": True,
+                "distinct_training_sha256_never_share_fit": True,
                 "standard_36_features_unchanged": True,
                 "model_version_unchanged": True,
                 "probability_method_unchanged": True,
