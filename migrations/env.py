@@ -13,6 +13,7 @@ from app import daily_prediction_runner as _daily_prediction_runner  # noqa: F40
 from app import forward_test_ledger as _forward_test_ledger  # noqa: F401,E402
 from app import j1_scheduler as _j1_scheduler  # noqa: F401,E402
 from app import models as _models  # noqa: F401,E402
+from app import odds_window_clv as _odds_window_clv  # noqa: F401,E402
 
 config = context.config
 
