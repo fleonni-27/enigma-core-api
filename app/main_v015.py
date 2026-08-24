@@ -18,7 +18,7 @@ from app.outcome_score_capture import backfill_missing_settled_fixture_results
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.36.0"
+app.version = "0.37.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
