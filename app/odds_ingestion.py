@@ -154,14 +154,14 @@ def ingest_prematch_odds_payload(
     payload: dict,
     snapshot_window: str | None = None,
 ) -> dict:
-    """Persist only price-state changes while retaining quote observation freshness.
+    """Persist only real price-state changes while keeping quote freshness.
 
     A logical stream is fixture + snapshot window + bookmaker + market + selection
     + source. The first observed price is inserted. Re-observing the same price
-    updates `last_seen_at`/`observation_count` on that state instead of creating a
-    duplicate row. A different price inserts a new row, including a return to a
-    previously seen price (e.g. 1.85 -> 1.87 -> 1.85), so movement history is not
-    collapsed.
+    updates the existing state's `fetched_at` (latest observation) and
+    `observation_count`, while `first_seen_at` remains unchanged. A different
+    price inserts a new row, including a return to a previously seen price
+    (1.85 -> 1.87 -> 1.85), so genuine movement history is never collapsed.
     """
 
     rows = payload.get("data") or []
@@ -218,8 +218,10 @@ def ingest_prematch_odds_payload(
                 previous = latest_by_stream.get(key)
 
                 if previous is not None and _stored_odd(previous.odd) == odd:
-                    previous.last_seen_at = _newer_datetime(
-                        previous.last_seen_at or previous.fetched_at,
+                    if previous.first_seen_at is None:
+                        previous.first_seen_at = previous.fetched_at
+                    previous.fetched_at = _newer_datetime(
+                        previous.fetched_at,
                         observed_at,
                     )
                     previous.observation_count = int(previous.observation_count or 1) + 1
@@ -238,8 +240,8 @@ def ingest_prematch_odds_payload(
                     odd=odd,
                     source=ODDS_SOURCE,
                     source_updated_at=source_updated_at,
+                    first_seen_at=observed_at,
                     fetched_at=observed_at,
-                    last_seen_at=observed_at,
                     observation_count=1,
                     snapshot_window=snapshot_window,
                 )
@@ -281,10 +283,10 @@ def ingest_prematch_odds_payload(
         "policy": {
             "logical_stream": "fixture_window_bookmaker_market_selection_source",
             "same_price_reobservation_inserts_new_row": False,
-            "same_price_reobservation_updates_last_seen_at": True,
+            "same_price_reobservation_refreshes_fetched_at": True,
+            "first_seen_at_is_preserved": True,
             "price_change_inserts_new_row": True,
             "price_return_after_intermediate_change_inserts_new_row": True,
-            "first_seen_and_last_seen_are_distinct": True,
             "postgresql_same_fixture_window_ingestion_serialized": True,
         },
     }
