@@ -6,13 +6,15 @@ from datetime import date
 
 from fastapi import HTTPException, Query
 
+from app.daily_operations import router as daily_operations_router
+from app.daily_prediction_runner import router as daily_prediction_runner_router
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main import app
 from app.outcome_score_capture import backfill_missing_settled_fixture_results
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.25.0"
+app.version = "0.30.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
@@ -125,3 +127,10 @@ def probability_calibration_v1_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
+
+
+# Keep operations routers on the long-lived entrypoint as well as the current wrappers.
+# This protects production environments whose Render start command is still pinned to
+# app.main_v015:app instead of following render.yaml changes automatically.
+app.include_router(daily_operations_router)
+app.include_router(daily_prediction_runner_router)
