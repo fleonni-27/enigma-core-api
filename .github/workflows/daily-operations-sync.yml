@@ -1,0 +1,36 @@
+name: Daily Operations Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # America/Sao_Paulo is UTC-3. GitHub Actions cron has minute precision,
+    # so 03:00 UTC is the midnight daily bootstrap.
+    - cron: "0 3 * * *"
+    # Refresh odds later in the same local day without manual fixture IDs.
+    - cron: "0 15 * * *"
+    - cron: "0 20 * * *"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve Sao Paulo date
+        id: date
+        shell: bash
+        run: echo "today=$(TZ=America/Sao_Paulo date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Sync fixtures and prematch odds
+        shell: bash
+        env:
+          TARGET_DATE: ${{ steps.date.outputs.today }}
+        run: |
+          set -euo pipefail
+          echo "Syncing Enigma Core for ${TARGET_DATE} (America/Sao_Paulo)"
+          curl --fail-with-body \
+            --retry 3 \
+            --retry-delay 10 \
+            --connect-timeout 30 \
+            --max-time 1500 \
+            -X POST \
+            "https://enigma-core-api.onrender.com/operations/daily-sync?target_date=${TARGET_DATE}&refresh_odds=true"
