@@ -7,6 +7,7 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
 from app.database import engine
@@ -16,9 +17,10 @@ from app.db_query_plan_audit import (
     summarize_comparison,
 )
 
-DB_RELEASE_VERSION = "db_release_v1"
+DB_RELEASE_VERSION = "db_release_v1_1"
 BASELINE_REVISION = "20260824_0001"
 INDEX_REVISION = "20260824_0002"
+DB_RELEASE_ADVISORY_LOCK_KEY = 45002642
 ANALYZE_TABLES = (
     "fixtures",
     "odds_snapshots",
@@ -31,6 +33,13 @@ ANALYZE_TABLES = (
 
 def _alembic_config() -> Config:
     return Config("alembic.ini")
+
+
+def _head_revision() -> str:
+    head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
+    if not head:
+        raise RuntimeError("Alembic head revision is not available")
+    return str(head)
 
 
 def _current_revision() -> str | None:
@@ -72,7 +81,7 @@ def _refresh_statistics() -> list[dict[str, Any]]:
     return results
 
 
-def run_release() -> dict[str, Any]:
+def _run_release_unlocked() -> dict[str, Any]:
     release_id = _release_id()
     initial_revision = _current_revision()
     config = _alembic_config()
@@ -113,6 +122,7 @@ def run_release() -> dict[str, Any]:
         "release_id": release_id,
         "initial_revision": initial_revision,
         "final_revision": _current_revision(),
+        "head_revision": _head_revision(),
         "baseline_explain_captured": before is not None,
         "before_audit_rows": before_rows,
         "after_audit_rows": after_rows,
@@ -125,8 +135,55 @@ def run_release() -> dict[str, Any]:
             "before_after_plans_persisted": True,
             "migration_failure_blocks_release": True,
             "audit_probe_failure_does_not_rollback_successful_migration": True,
+            "single_writer_advisory_lock": engine.dialect.name == "postgresql",
         },
     }
+
+
+def run_release() -> dict[str, Any]:
+    """Apply migrations under a PostgreSQL session advisory lock."""
+
+    if engine.dialect.name != "postgresql":
+        return _run_release_unlocked()
+
+    with engine.connect() as lock_connection:
+        lock_connection.execute(
+            text("SELECT pg_advisory_lock(:lock_key)"),
+            {"lock_key": DB_RELEASE_ADVISORY_LOCK_KEY},
+        )
+        try:
+            return _run_release_unlocked()
+        finally:
+            try:
+                lock_connection.execute(
+                    text("SELECT pg_advisory_unlock(:lock_key)"),
+                    {"lock_key": DB_RELEASE_ADVISORY_LOCK_KEY},
+                )
+            finally:
+                lock_connection.rollback()
+
+
+def ensure_database_release_current() -> dict[str, Any]:
+    """Startup fallback when the platform pre-deploy hook is not synchronized.
+
+    This path is deliberately cheap when the database is already at Alembic
+    head. It exists because service settings can lag repository Blueprint changes;
+    it does not replace the preferred pre-deploy migration hook.
+    """
+
+    current = _current_revision()
+    head = _head_revision()
+    if current == head:
+        return {
+            "status": "current",
+            "version": DB_RELEASE_VERSION,
+            "current_revision": current,
+            "head_revision": head,
+            "migration_executed": False,
+        }
+    result = run_release()
+    result["startup_fallback_executed"] = True
+    return result
 
 
 def main() -> None:
