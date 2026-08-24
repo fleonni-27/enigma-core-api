@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     sportmonks_api_token: str
     sportmonks_base_url: str = "https://api.sportmonks.com/v3/football"
     internal_api_key: str | None = None
+    recover_2026_snapshots_on_startup: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
