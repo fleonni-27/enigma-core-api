@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from app.daily_prediction_runner_v2 import _run_health
 from app.decision_engine_v2 import _candidate_rank_key, _candidate_timing_audit
+from tests.test_prediction_window_policy import PredictionWindowPolicyTests
 
 
 class DecisionEngineV2PolicyTests(unittest.TestCase):
