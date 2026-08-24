@@ -12,6 +12,7 @@ from app.dashboard_operations_v2 import router as dashboard_operations_v2_router
 from app.dashboard_operations_v2_health import install_dashboard_operations_v2_health
 from app.decision_engine_v2 import router as decision_engine_v2_router
 from app.historical_controller_v2 import run_historical_controller_v2
+from app.internal_endpoint_auth import install_internal_endpoint_auth
 from app.j1_scheduler_routes import install_j1_scheduler_routes
 from app.main import app
 from app.outcome_score_capture import backfill_missing_settled_fixture_results
@@ -19,7 +20,7 @@ from app.prediction_window_policy import install_prediction_window_policy
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.39.0"
+app.version = "0.40.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
@@ -138,6 +139,11 @@ def probability_calibration_v1_endpoint(
 # The public inference endpoint fails fast on j1_45m_v1, while the database
 # mapper remains the final integrity boundary for every ORM insert/update path.
 install_prediction_window_policy()
+
+# Protect every unsafe HTTP method. The two automation POST routes accept a
+# GitHub Actions OIDC token bound to this repository/main/workflow; all other
+# mutable endpoints require X-Enigma-Internal-Key when manual access is needed.
+install_internal_endpoint_auth(app)
 
 # Patch the HTTP J1 endpoint through the same advisory lock used by the Render
 # cron, then enrich Operations V2 with the persisted scheduler heartbeat.
