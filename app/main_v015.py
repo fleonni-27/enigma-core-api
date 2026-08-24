@@ -2,14 +2,24 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Request
 
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main import app
+from app.operations_security import validate_operations_request
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
 app.version = "0.25.0"
+
+
+@app.middleware("http")
+async def operations_security_middleware(request: Request, call_next):
+    blocked = validate_operations_request(request)
+    if blocked is not None:
+        return blocked
+    return await call_next(request)
+
 
 # Replace only the historical controller route; preserve all routes already exposed by app.main.
 app.router.routes = [
