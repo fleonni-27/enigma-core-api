@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from app import dashboard_operations_v2 as dashboard_module
 from app.j1_scheduler import J1_HEARTBEAT_STALE_MINUTES, latest_j1_run
 
 DASHBOARD_OPERATIONS_V2_HEALTH_VERSION = "dashboard_operations_v2_3"
 _installed = False
-_original_builder = dashboard_module.build_dashboard_operations_v2
+_original_builder: Callable[..., dict[str, Any]] | None = None
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -66,6 +66,8 @@ def _scheduler_payload(now: datetime) -> dict[str, Any]:
 
 
 def _build_with_scheduler_health(*, target_date=None) -> dict[str, Any]:
+    if _original_builder is None:
+        raise RuntimeError("Dashboard Operations V2 health wrapper is not installed")
     payload = _original_builder(target_date=target_date)
     now = datetime.now(timezone.utc)
     scheduler = _scheduler_payload(now)
@@ -101,9 +103,14 @@ def _patch_html(html: str) -> str:
 
 
 def install_dashboard_operations_v2_health() -> None:
-    global _installed
+    global _installed, _original_builder
     if _installed:
         return
+
+    # Capture the builder at install time, not import time. This preserves any
+    # preceding read-plan optimization (for example Bulk Reads V1) and wraps it
+    # with scheduler health instead of accidentally restoring the legacy N+1 path.
+    _original_builder = dashboard_module.build_dashboard_operations_v2
     dashboard_module.build_dashboard_operations_v2 = _build_with_scheduler_health
     dashboard_module.DASHBOARD_OPERATIONS_V2_VERSION = DASHBOARD_OPERATIONS_V2_HEALTH_VERSION
     dashboard_module.DASHBOARD_OPERATIONS_V2_HTML = _patch_html(
