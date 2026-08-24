@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app import db_query_plan_audit as audit
 from app import db_release
@@ -79,6 +80,36 @@ class DbPerformanceMigrationTests(unittest.TestCase):
         self.assertEqual(db_release.INDEX_REVISION, "20260824_0002")
         render = Path("render.yaml").read_text()
         self.assertIn("preDeployCommand: python -m app.db_release", render)
+
+    def test_startup_fallback_is_noop_when_database_is_at_head(self) -> None:
+        with (
+            patch.object(db_release, "_current_revision", return_value="20260824_0002"),
+            patch.object(db_release, "_head_revision", return_value="20260824_0002"),
+            patch.object(db_release, "run_release") as run_release,
+        ):
+            result = db_release.ensure_database_release_current()
+        self.assertEqual(result["status"], "current")
+        self.assertFalse(result["migration_executed"])
+        run_release.assert_not_called()
+
+    def test_startup_fallback_runs_release_when_revision_lags(self) -> None:
+        with (
+            patch.object(db_release, "_current_revision", return_value=None),
+            patch.object(db_release, "_head_revision", return_value="20260824_0002"),
+            patch.object(
+                db_release,
+                "run_release",
+                return_value={"status": "ok", "final_revision": "20260824_0002"},
+            ) as run_release,
+        ):
+            result = db_release.ensure_database_release_current()
+        self.assertTrue(result["startup_fallback_executed"])
+        run_release.assert_called_once_with()
+
+    def test_web_entrypoint_contains_release_gate(self) -> None:
+        entrypoint = Path("app/main_v015.py").read_text()
+        self.assertIn("ensure_database_release_current", entrypoint)
+        self.assertIn("enforce_managed_database_release", entrypoint)
 
 
 if __name__ == "__main__":
