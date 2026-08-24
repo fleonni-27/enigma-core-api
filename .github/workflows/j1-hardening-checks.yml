@@ -45,6 +45,7 @@ on:
       - "tests/test_sportmonks_resilience.py"
       - ".github/workflows/daily-operations-sync.yml"
       - ".github/workflows/daily-prediction-runner-v1.yml"
+      - ".github/workflows/forward-test-settlement-runner-v1.yml"
       - ".github/workflows/j1-hardening-checks.yml"
   workflow_dispatch:
 
