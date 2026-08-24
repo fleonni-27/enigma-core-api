@@ -33,6 +33,7 @@ class PredictionWindowPolicyTests(unittest.TestCase):
     def _fixture(self, sportmonks_id: int, starts_at: datetime) -> Fixture:
         with SessionLocal() as session:
             fixture = Fixture(
+                id=sportmonks_id,
                 sportmonks_id=sportmonks_id,
                 league_name="La Liga",
                 home_team=f"Home {sportmonks_id}",
@@ -55,6 +56,7 @@ class PredictionWindowPolicyTests(unittest.TestCase):
     ) -> int:
         with SessionLocal() as session:
             row = Prediction(
+                id=fixture_id + 1_000_000,
                 fixture_id=fixture_id,
                 prediction_window=J1_RESERVED_WINDOW,
                 model_version="baseline_1x2_temporal_v1",
