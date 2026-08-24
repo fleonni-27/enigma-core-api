@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from app import daily_prediction_runner_v2 as runner_module
+from app.j1_pending_selector_v2 import install_j1_pending_selector_v2
 
 _installed = False
 
@@ -42,6 +43,11 @@ def install_j1_scheduler_routes() -> None:
     global _installed
     if _installed:
         return
+
+    # The HTTP fallback and the Render cron must use the same pending selector.
+    # Install it before the mutable J1 route is exposed so already-recorded
+    # fixtures can never consume the per-cycle selection capacity.
+    install_j1_pending_selector_v2()
 
     runner_module.router.routes = [
         route
