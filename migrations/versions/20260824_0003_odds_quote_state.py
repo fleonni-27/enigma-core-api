@@ -5,9 +5,9 @@ Revises: 20260824_0002
 Create Date: 2026-08-24
 
 Repeated observations of the same price no longer need one physical row each.
-`fetched_at` remains the first-seen timestamp of a price state, while
-`last_seen_at` and `observation_count` record continued observation. A composite
-stream index supports loading the latest state for one fixture/window/market.
+`first_seen_at` marks the beginning of a price state, while the existing
+`fetched_at` column continues to mean latest observation for all current readers.
+`observation_count` records how many identical observations were collapsed.
 """
 
 from alembic import op
@@ -28,7 +28,7 @@ INDEX_COLUMNS = (
 def upgrade() -> None:
     op.add_column(
         "odds_snapshots",
-        sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column(
         "odds_snapshots",
@@ -38,6 +38,14 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("1"),
         ),
+    )
+
+    # Existing rows were one observation per physical row, so fetched_at is also
+    # their first-seen time. Backfill once to give old and new rows the same
+    # movement-history semantics.
+    op.execute(
+        "UPDATE odds_snapshots SET first_seen_at = fetched_at "
+        "WHERE first_seen_at IS NULL"
     )
 
     bind = op.get_bind()
@@ -76,4 +84,4 @@ def downgrade() -> None:
         op.drop_index(INDEX_NAME, table_name="odds_snapshots")
 
     op.drop_column("odds_snapshots", "observation_count")
-    op.drop_column("odds_snapshots", "last_seen_at")
+    op.drop_column("odds_snapshots", "first_seen_at")
