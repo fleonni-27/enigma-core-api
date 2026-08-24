@@ -24,6 +24,7 @@ on:
       - "app/models.py"
       - "app/odds_ingestion.py"
       - "app/performance_observatory.py"
+      - "app/snapshot_recovery_2026.py"
       - "app/sportmonks.py"
       - "migrations/**"
       - "alembic.ini"
@@ -40,6 +41,7 @@ on:
       - "tests/test_odds_quote_dedupe.py"
       - "tests/test_performance_observatory.py"
       - "tests/test_performance_scale_v1.py"
+      - "tests/test_snapshot_recovery_2026.py"
       - "tests/test_sportmonks_resilience.py"
       - ".github/workflows/daily-operations-sync.yml"
       - ".github/workflows/daily-prediction-runner-v1.yml"
@@ -67,4 +69,4 @@ jobs:
       - name: Validate Alembic migration chain
         run: alembic upgrade head
       - name: Run J1 hardening and scale tests
-        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_db_performance_migrations tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_odds_quote_dedupe tests.test_performance_observatory tests.test_performance_scale_v1 tests.test_sportmonks_resilience -v
+        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_db_performance_migrations tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_odds_quote_dedupe tests.test_performance_observatory tests.test_performance_scale_v1 tests.test_snapshot_recovery_2026 tests.test_sportmonks_resilience -v

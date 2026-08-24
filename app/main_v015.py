@@ -21,6 +21,10 @@ from app.main import app
 from app.outcome_score_capture import backfill_missing_settled_fixture_results
 from app.prediction_window_policy import install_prediction_window_policy
 from app.probability_calibration import build_probability_calibration_v1
+from app.snapshot_recovery_2026 import (
+    recover_missing_2026_snapshots,
+    router as snapshot_recovery_router,
+)
 from app.upstream_exceptions import register_upstream_exceptions
 
 app.version = "0.43.0"
@@ -28,22 +32,63 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
 
+async def _run_managed_startup_maintenance() -> None:
+    settings = get_settings()
+    if str(settings.app_env or "").lower() == "production":
+        try:
+            result = await asyncio.to_thread(ensure_database_release_current)
+            logger.info(
+                "database release background status=%s current=%s head=%s migrated=%s",
+                result.get("status"),
+                result.get("current_revision") or result.get("final_revision"),
+                result.get("head_revision"),
+                result.get("migration_executed", result.get("startup_fallback_executed", False)),
+            )
+        except Exception:
+            # Production readiness must not be held hostage by a long concurrent
+            # index build. The old release remains live while this background
+            # maintenance attempt is observable in Render logs.
+            logger.exception("managed database release background attempt failed")
+
+    if settings.recover_2026_snapshots_on_startup:
+        try:
+            recovery = await recover_missing_2026_snapshots()
+            logger.warning(
+                "snapshot_recovery_2026_summary status=%s selected=%s recovered=%s "
+                "training_core=%s incomplete=%s empty=%s upstream_failed=%s "
+                "persistence_failed=%s remaining=%s remaining_by_league=%s",
+                recovery.get("status"),
+                recovery.get("selected_missing"),
+                recovery.get("recovered"),
+                recovery.get("recovered_training_core"),
+                recovery.get("recovered_incomplete"),
+                recovery.get("unrecoverable_empty_payload"),
+                recovery.get("upstream_failed"),
+                recovery.get("persistence_failed"),
+                recovery.get("remaining_missing"),
+                recovery.get("remaining_missing_by_league"),
+            )
+        except Exception:
+            logger.exception("2026 snapshot recovery background attempt failed")
+
+
 @app.on_event("startup")
-async def enforce_managed_database_release() -> None:
-    # Preferred path is Render preDeployCommand. This startup gate exists because
-    # an already-created Render service can temporarily lag render.yaml changes.
-    # It is a no-op when Alembic is already at head and blocks readiness if a
-    # required migration itself fails.
-    if str(get_settings().app_env or "").lower() != "production":
-        return
-    result = await asyncio.to_thread(ensure_database_release_current)
-    logger.info(
-        "database release gate status=%s current=%s head=%s migrated=%s",
-        result.get("status"),
-        result.get("current_revision") or result.get("final_revision"),
-        result.get("head_revision"),
-        result.get("migration_executed", result.get("startup_fallback_executed", False)),
+async def schedule_managed_startup_maintenance() -> None:
+    settings = get_settings()
+    should_run = (
+        str(settings.app_env or "").lower() == "production"
+        or settings.recover_2026_snapshots_on_startup
     )
+    if not should_run:
+        return
+
+    # Render's existing service did not inherit preDeployCommand from the
+    # blueprint. Run managed migrations off the readiness path so CREATE INDEX
+    # CONCURRENTLY cannot cause a port-open deployment timeout. Recovery, when
+    # explicitly enabled, runs after the migration attempt in the same task.
+    task = asyncio.create_task(_run_managed_startup_maintenance())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def _run_legacy_score_backfill() -> None:
@@ -177,3 +222,4 @@ app.include_router(daily_operations_router)
 app.include_router(daily_prediction_runner_router)
 app.include_router(dashboard_operations_v2_router)
 app.include_router(decision_engine_v2_router)
+app.include_router(snapshot_recovery_router)
