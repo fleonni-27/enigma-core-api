@@ -1,0 +1,68 @@
+name: Forward-Test Settlement Runner V1
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Settle finished forward-test fixtures every 30 minutes.
+    # The API itself verifies that a fixture is finished before settlement.
+    - cron: "7,37 * * * *"
+
+concurrency:
+  group: forward-test-settlement-runner-v1
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for settlement route
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Waiting for Enigma Core settlement route"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error \
+              --connect-timeout 15 \
+              --max-time 45 \
+              "https://enigma-core-api.onrender.com/research/forward-test/ledger?settlement_status=UNSETTLED&limit=1" \
+              >/tmp/settlement-ready.json; then
+              echo "Settlement dependencies are ready on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Settlement route not ready (attempt ${attempt}/12); retrying in 10s"
+            sleep 10
+          done
+          echo "Settlement route did not become ready in time"
+          exit 1
+
+      - name: Settle pending forward-test records
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running Enigma Core Outcome Settlement V1"
+          curl --fail-with-body \
+            --retry 6 \
+            --retry-all-errors \
+            --retry-delay 20 \
+            --retry-max-time 600 \
+            --connect-timeout 30 \
+            --max-time 900 \
+            -X POST \
+            "https://enigma-core-api.onrender.com/research/forward-test/settle/pending?limit=25" \
+            -o /tmp/settlement-run.json
+          cat /tmp/settlement-run.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/settlement-run.json').read_text())
+          status = payload.get('status')
+          if status not in {'ok', 'partial'}:
+              raise SystemExit(f"settlement runner returned unexpected status: {status}")
+          summary = payload.get('summary') or {}
+          failed = int(summary.get('failed_fixtures') or 0)
+          if failed:
+              raise SystemExit(f"settlement runner reported failed fixtures: {failed}")
+          print('Outcome Settlement V1 completed without failed fixtures')
+          PY
