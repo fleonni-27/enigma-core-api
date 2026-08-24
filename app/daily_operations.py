@@ -158,14 +158,29 @@ async def run_daily_sync(*, target_date: date | None = None, refresh_odds: bool 
                         snapshot_window=snapshot_window,
                     )
                     created = int(result.get("created") or 0)
+                    initial_states = int(result.get("initial_states_created") or 0)
+                    movements = int(result.get("movements_created") or 0)
+                    deduplicated = int(result.get("deduplicated_unchanged") or 0)
                     counts["odds_fixture_ok"] += 1
                     counts["odds_rows_created"] += created
+                    counts["odds_initial_states_created"] += initial_states
+                    counts["odds_movements_created"] += movements
+                    counts["odds_unchanged_deduplicated"] += deduplicated
+                    counts["odds_storage_rows_avoided"] += int(
+                        result.get("storage_rows_avoided") or deduplicated
+                    )
                     odds_results.append(
                         {
                             "sportmonks_fixture_id": sportmonks_fixture_id,
                             "status": result.get("status"),
                             "received": result.get("received", 0),
                             "created": created,
+                            "initial_states_created": initial_states,
+                            "movements_created": movements,
+                            "deduplicated_unchanged": deduplicated,
+                            "storage_rows_avoided": int(
+                                result.get("storage_rows_avoided") or deduplicated
+                            ),
                             "filtered_out": result.get("filtered_out", 0),
                             "skipped": result.get("skipped", 0),
                             "error_count": len(result.get("errors") or []),
@@ -201,6 +216,10 @@ async def run_daily_sync(*, target_date: date | None = None, refresh_odds: bool 
             "fixtures_ok": counts["odds_fixture_ok"],
             "fixtures_failed": counts["odds_fixture_failed"],
             "rows_created": counts["odds_rows_created"],
+            "initial_states_created": counts["odds_initial_states_created"],
+            "movements_created": counts["odds_movements_created"],
+            "deduplicated_unchanged": counts["odds_unchanged_deduplicated"],
+            "storage_rows_avoided": counts["odds_storage_rows_avoided"],
             "items": odds_results,
         },
         "performance": {
@@ -216,6 +235,7 @@ async def run_daily_sync(*, target_date: date | None = None, refresh_odds: bool 
             "manual_odds_ingestion_required": False,
             "daily_sync_is_source_ingestion_only": True,
             "predictions_or_decisions_are_not_generated": True,
+            "unchanged_odds_are_collapsed_without_losing_price_movements": True,
         },
     }
 
