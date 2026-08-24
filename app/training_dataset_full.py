@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextvars import ContextVar
 from datetime import date, datetime, time, timezone
+from typing import Any
 
 from sqlalchemy import select
 
@@ -20,14 +22,44 @@ from app.training_dataset_v11 import (
 FULL_DATASET_VERSION = "training_dataset_full_v1"
 MAX_FULL_DATASET_ROWS = 5000
 
+# Lazy request/task-local memoization. The cache is not shared across
+# independent requests, so dataset freshness between batch runs is preserved.
+_request_dataset_cache: ContextVar[dict[str, Any] | None] = ContextVar(
+    "full_training_dataset_request_cache",
+    default=None,
+)
+
 
 def _stable_dataset_hash(rows: list[dict], metadata: dict) -> str:
-    payload = {
-        "metadata": metadata,
-        "rows": rows,
-    }
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8")
+    payload = {"metadata": metadata, "rows": rows}
+    raw = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _cache_state() -> dict[str, Any]:
+    state = _request_dataset_cache.get()
+    if state is None:
+        state = {"datasets": {}, "hits": 0, "misses": 0}
+        _request_dataset_cache.set(state)
+    return state
+
+
+def request_local_dataset_cache_stats() -> dict[str, int]:
+    state = _request_dataset_cache.get()
+    if state is None:
+        return {"entries": 0, "hits": 0, "misses": 0}
+    datasets = state.get("datasets") or {}
+    return {
+        "entries": len(datasets),
+        "hits": int(state.get("hits") or 0),
+        "misses": int(state.get("misses") or 0),
+    }
 
 
 def build_full_training_dataset(
@@ -51,6 +83,24 @@ def build_full_training_dataset(
     if max_rows < 1 or max_rows > MAX_FULL_DATASET_ROWS:
         raise ValueError(f"max_rows must be between 1 and {MAX_FULL_DATASET_ROWS}")
 
+    cache_state = _cache_state()
+    cache_key = (
+        start_date.isoformat(),
+        end_date.isoformat(),
+        tuple(leagues or []),
+        int(lookback_matches),
+        int(min_history_matches),
+        bool(include_skipped_details),
+        int(skipped_detail_limit),
+        int(max_rows),
+    )
+    datasets: dict[tuple[Any, ...], dict] = cache_state["datasets"]
+    cached = datasets.get(cache_key)
+    if cached is not None:
+        cache_state["hits"] = int(cache_state.get("hits") or 0) + 1
+        return cached
+    cache_state["misses"] = int(cache_state.get("misses") or 0) + 1
+
     start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
     requested_keys, requested_names = _requested_league_context(leagues)
@@ -59,7 +109,9 @@ def build_full_training_dataset(
         stmt = select(Fixture).where(Fixture.starts_at.between(start_dt, end_dt))
         if requested_names:
             stmt = stmt.where(Fixture.league_name.in_(sorted(requested_names)))
-        candidates = session.scalars(stmt.order_by(Fixture.starts_at.asc(), Fixture.id.asc())).all()
+        candidates = session.scalars(
+            stmt.order_by(Fixture.starts_at.asc(), Fixture.id.asc())
+        ).all()
 
         rows: list[dict] = []
         skipped = {
@@ -82,18 +134,28 @@ def build_full_training_dataset(
                     skipped_details.append(_skip_detail(fixture, "not_target_league"))
                 continue
 
-            row, reason, detail = _build_row(session, fixture, lookback_matches, min_history_matches)
+            row, reason, detail = _build_row(
+                session,
+                fixture,
+                lookback_matches,
+                min_history_matches,
+            )
             if row is None:
                 if reason:
                     skipped[reason] = skipped.get(reason, 0) + 1
-                if include_skipped_details and detail and len(skipped_details) < skipped_detail_limit:
+                if (
+                    include_skipped_details
+                    and detail
+                    and len(skipped_details) < skipped_detail_limit
+                ):
                     skipped_details.append(detail)
                 continue
 
             rows.append(row)
             if len(rows) > max_rows:
                 raise ValueError(
-                    f"full dataset has more than max_rows={max_rows}; split the requested date range into smaller windows"
+                    f"full dataset has more than max_rows={max_rows}; "
+                    "split the requested date range into smaller windows"
                 )
 
             profile = str(row["source_profile"])
@@ -120,7 +182,10 @@ def build_full_training_dataset(
         "deterministic_order": "starts_at ASC, fixture_id ASC",
     }
     dataset_sha256 = _stable_dataset_hash(rows, metadata)
-    dataset_id = f"{FULL_DATASET_VERSION}:{start_date.isoformat()}:{end_date.isoformat()}:{dataset_sha256[:16]}"
+    dataset_id = (
+        f"{FULL_DATASET_VERSION}:{start_date.isoformat()}:"
+        f"{end_date.isoformat()}:{dataset_sha256[:16]}"
+    )
 
     response = {
         "status": "ok",
@@ -138,7 +203,9 @@ def build_full_training_dataset(
             "source_profiles_total": profile_counts,
             "rows_by_league": dict(sorted(league_counts.items())),
             "xg_feature_ready_rows_total": xg_ready_total,
-            "xg_feature_ready_pct_total": round((xg_ready_total / len(rows)) * 100, 1) if rows else 0,
+            "xg_feature_ready_pct_total": (
+                round((xg_ready_total / len(rows)) * 100, 1) if rows else 0
+            ),
             "leakage_violations": skipped.get("leakage_violation", 0),
             "skipped": skipped,
         },
@@ -151,7 +218,14 @@ def build_full_training_dataset(
             "history_scope": "same canonical league and strictly earlier fixtures only",
             "rolling_window_matches": lookback_matches,
             "minimum_history_matches": min_history_matches,
-            "labels": ["outcome_1x2", "home_goals", "away_goals", "total_goals", "btts", "over_2_5"],
+            "labels": [
+                "outcome_1x2",
+                "home_goals",
+                "away_goals",
+                "total_goals",
+                "btts",
+                "over_2_5",
+            ],
         },
         "rows": rows,
         "policy": {
@@ -162,7 +236,10 @@ def build_full_training_dataset(
             "upstream_unavailable_excluded": True,
             "target_match_postgame_data_as_features": False,
             "target_match_postgame_data_allowed_for_labels_only": True,
-            "history_cutoff_rule": "historical fixture starts_at must be strictly less than target fixture starts_at",
+            "history_cutoff_rule": (
+                "historical fixture starts_at must be strictly less than "
+                "target fixture starts_at"
+            ),
             "xg_absence_is_zero": False,
             "xg_missing_value": None,
             "deterministic_order": "starts_at ASC, fixture_id ASC",
@@ -175,4 +252,6 @@ def build_full_training_dataset(
             "limit": skipped_detail_limit,
             "items": skipped_details,
         }
+
+    datasets[cache_key] = response
     return response
