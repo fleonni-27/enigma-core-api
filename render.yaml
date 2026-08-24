@@ -23,8 +23,10 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.j1_scheduler
-    # Primary J1 scheduler. The backend itself enforces kickoff-45m and never runs early.
+    startCommand: python -m app.j1_scheduler_v2
+    # Primary J1 scheduler. Selector V2 excludes already-recorded fixture/window
+    # pairs before applying the per-cycle fixture cap. The backend still enforces
+    # kickoff-45m and never runs early.
     # Minute cadence means a newly opened J1 is normally picked up within ~1 minute.
     schedule: "* * * * *"
     envVars:
