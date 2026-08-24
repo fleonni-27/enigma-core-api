@@ -4,17 +4,26 @@ Revision ID: 20260824_0002
 Revises: 20260824_0001
 Create Date: 2026-08-24
 
-These indexes match the current J1, dashboard, inference/training and ledger
-query shapes. PostgreSQL builds them CONCURRENTLY to avoid blocking production
-writes for the duration of a full index build.
+The first production adoption showed that CREATE INDEX CONCURRENTLY could wait
+indefinitely for old transactions while the Render service remained healthy.
+This revision is still safe to change because production never advanced beyond
+0001. Index creation is now resumable: valid indexes are skipped, invalid
+artifacts left by interrupted concurrent builds are dropped, and regular index
+builds use bounded lock/statement timeouts in autocommit mode. Each completed
+index survives a later interruption, so the next attempt resumes instead of
+starting the whole set from zero.
 """
 
 from alembic import op
+from sqlalchemy import text
 
 revision = "20260824_0002"
 down_revision = "20260824_0001"
 branch_labels = None
 depends_on = None
+
+LOCK_TIMEOUT = "30s"
+STATEMENT_TIMEOUT = "5min"
 
 INDEXES = (
     (
@@ -65,6 +74,27 @@ INDEXES = (
 )
 
 
+def _index_valid(bind, name: str) -> bool | None:
+    row = bind.execute(
+        text(
+            """
+            SELECT i.indisvalid
+            FROM pg_class c
+            JOIN pg_index i ON i.indexrelid = c.oid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'i'
+              AND c.relname = :name
+              AND n.nspname = current_schema()
+            LIMIT 1
+            """
+        ),
+        {"name": name},
+    ).first()
+    if row is None:
+        return None
+    return bool(row[0])
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
@@ -74,11 +104,23 @@ def upgrade() -> None:
 
     context = op.get_context()
     with context.autocommit_block():
-        for name, table, columns in INDEXES:
-            op.execute(
-                f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} "
-                f"ON {table} ({columns})"
-            )
+        op.execute(f"SET lock_timeout = '{LOCK_TIMEOUT}'")
+        op.execute(f"SET statement_timeout = '{STATEMENT_TIMEOUT}'")
+        try:
+            for name, table, columns in INDEXES:
+                state = _index_valid(bind, name)
+                if state is True:
+                    print(f"db_release index={name} status=already_valid", flush=True)
+                    continue
+                if state is False:
+                    print(f"db_release index={name} status=drop_invalid", flush=True)
+                    op.execute(f"DROP INDEX IF EXISTS {name}")
+                print(f"db_release index={name} status=building", flush=True)
+                op.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})")
+                print(f"db_release index={name} status=ready", flush=True)
+        finally:
+            op.execute("RESET statement_timeout")
+            op.execute("RESET lock_timeout")
 
 
 def downgrade() -> None:
@@ -88,5 +130,9 @@ def downgrade() -> None:
 
     context = op.get_context()
     with context.autocommit_block():
-        for name, _table, _columns in reversed(INDEXES):
-            op.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
+        op.execute(f"SET lock_timeout = '{LOCK_TIMEOUT}'")
+        try:
+            for name, _table, _columns in reversed(INDEXES):
+                op.execute(f"DROP INDEX IF EXISTS {name}")
+        finally:
+            op.execute("RESET lock_timeout")
