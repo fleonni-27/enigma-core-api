@@ -11,7 +11,7 @@ from jwt import PyJWKClient
 
 from app.config import get_settings
 
-INTERNAL_ENDPOINT_AUTH_VERSION = "internal_endpoint_auth_v1"
+INTERNAL_ENDPOINT_AUTH_VERSION = "internal_endpoint_auth_v2"
 INTERNAL_KEY_HEADER = "x-enigma-internal-key"
 GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_OIDC_JWKS_URL = f"{GITHUB_OIDC_ISSUER}/.well-known/jwks"
@@ -20,11 +20,12 @@ GITHUB_REPOSITORY = "fleonni-27/enigma-core-api"
 GITHUB_MAIN_REF = "refs/heads/main"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
-# Only the two HTTP automation fallbacks can use GitHub OIDC. Every other
-# mutating endpoint requires the private internal API key.
+# GitHub OIDC is restricted to the exact automation route/workflow pairs below.
+# Every other mutating endpoint still requires the private internal API key.
 GITHUB_AUTOMATION_WORKFLOWS: dict[str, str] = {
     "/operations/daily-sync": ".github/workflows/daily-operations-sync.yml",
     "/operations/daily-prediction-runner": ".github/workflows/daily-prediction-runner-v1.yml",
+    "/research/forward-test/settle/pending": ".github/workflows/forward-test-settlement-runner-v1.yml",
 }
 
 _jwk_client = PyJWKClient(GITHUB_OIDC_JWKS_URL, cache_keys=True)
