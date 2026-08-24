@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from threading import Lock
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Identity, Integer, String, func, select, text
@@ -22,6 +23,11 @@ from app.daily_prediction_runner_v2 import (
 from app.j1_pending_selector_v2 import (
     J1_PENDING_SELECTOR_VERSION,
     install_j1_pending_selector_v2,
+)
+from app.performance_observatory import (
+    PIPELINE_J1,
+    record_j1_result,
+    try_persist_pipeline_sample,
 )
 from app.prematch_inference import MODEL_VERSION
 from app.prediction_window_policy import (
@@ -154,6 +160,8 @@ async def run_j1_cycle(
     Runner health is persisted so an HTTP 200 cannot hide an internal J1 failure.
     """
 
+    cycle_started = perf_counter()
+
     # Install both operational guards on every scheduler path. The pending
     # selector prevents completed fixtures from consuming the batch cap. The
     # prediction-window policy makes j1_45m_v1 writable only inside this
@@ -228,6 +236,13 @@ async def run_j1_cycle(
             counts=counts,
             error=scheduler_error,
         )
+        performance = result.setdefault("performance", {})
+        performance["observatory"] = record_j1_result(
+            result,
+            source=source,
+            run_id=run_id,
+            scheduler_status=scheduler_status,
+        )
         result["scheduler"] = {
             "version": J1_SCHEDULER_VERSION,
             "source": source,
@@ -243,6 +258,14 @@ async def run_j1_cycle(
             run_id,
             status="FAILED",
             error=exc.__class__.__name__,
+        )
+        try_persist_pipeline_sample(
+            pipeline=PIPELINE_J1,
+            source=source,
+            status="FAILED",
+            cycle_seconds=perf_counter() - cycle_started,
+            run_id=run_id,
+            raw_metrics={"error": exc.__class__.__name__},
         )
         raise
     finally:
