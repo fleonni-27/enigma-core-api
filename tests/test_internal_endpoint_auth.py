@@ -76,6 +76,29 @@ class InternalEndpointAuthTests(unittest.TestCase):
         )
         self.assertFalse(_workflow_claim_allowed(path="/operations/daily-sync", claims=wrong_workflow))
 
+    def test_settlement_oidc_claims_are_bound_to_exact_workflow_and_route(self) -> None:
+        claims = {
+            "repository": GITHUB_REPOSITORY,
+            "ref": GITHUB_MAIN_REF,
+            "event_name": "schedule",
+            "workflow_ref": (
+                f"{GITHUB_REPOSITORY}/.github/workflows/"
+                f"forward-test-settlement-runner-v1.yml@{GITHUB_MAIN_REF}"
+            ),
+        }
+        settlement_path = "/research/forward-test/settle/pending"
+        self.assertTrue(_workflow_claim_allowed(path=settlement_path, claims=claims))
+
+        wrong_workflow = dict(
+            claims,
+            workflow_ref=(
+                f"{GITHUB_REPOSITORY}/.github/workflows/"
+                f"daily-operations-sync.yml@{GITHUB_MAIN_REF}"
+            ),
+        )
+        self.assertFalse(_workflow_claim_allowed(path=settlement_path, claims=wrong_workflow))
+        self.assertFalse(_workflow_claim_allowed(path="/research/future-batch/run", claims=claims))
+
     def test_oidc_is_not_accepted_for_arbitrary_mutating_endpoint(self) -> None:
         claims = {
             "repository": GITHUB_REPOSITORY,
