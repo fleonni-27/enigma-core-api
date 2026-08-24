@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str
     sportmonks_api_token: str
     sportmonks_base_url: str = "https://api.sportmonks.com/v3/football"
+    internal_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

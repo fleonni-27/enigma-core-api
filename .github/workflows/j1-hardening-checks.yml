@@ -3,22 +3,31 @@ name: J1 Hardening Checks
 on:
   pull_request:
     paths:
+      - "app/config.py"
       - "app/daily_operations.py"
       - "app/daily_prediction_runner_v2.py"
       - "app/decision_engine_v2.py"
       - "app/inference_runtime_v2.py"
       - "app/inference_fit_cache.py"
+      - "app/internal_endpoint_auth.py"
       - "app/j1_pending_selector_v2.py"
       - "app/j1_scheduler.py"
       - "app/j1_scheduler_v2.py"
       - "app/j1_scheduler_routes.py"
+      - "app/main_v015.py"
+      - "app/main_v016.py"
+      - "app/main_v017.py"
       - "app/sportmonks.py"
+      - "requirements.txt"
       - "render.yaml"
+      - "tests/test_internal_endpoint_auth.py"
       - "tests/test_j1_hardening.py"
       - "tests/test_j1_pending_selector_v2.py"
       - "tests/test_inference_runtime_v2.py"
       - "tests/test_inference_fit_cache.py"
       - "tests/test_performance_scale_v1.py"
+      - ".github/workflows/daily-operations-sync.yml"
+      - ".github/workflows/daily-prediction-runner-v1.yml"
       - ".github/workflows/j1-hardening-checks.yml"
   workflow_dispatch:
 
@@ -41,4 +50,4 @@ jobs:
       - name: Compile application
         run: python -m compileall -q app
       - name: Run J1 hardening and scale tests
-        run: python -m unittest tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_performance_scale_v1 -v
+        run: python -m unittest tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_performance_scale_v1 -v
