@@ -23,7 +23,7 @@ from app.prediction_window_policy import install_prediction_window_policy
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.42.0"
+app.version = "0.43.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
