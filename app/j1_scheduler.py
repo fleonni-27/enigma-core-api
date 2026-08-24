@@ -12,13 +12,23 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, SessionLocal, engine
 from app.daily_prediction_runner_v2 import (
+    DAILY_PREDICTION_RUNNER_VERSION,
     DEFAULT_MAX_FIXTURES,
     DEFAULT_MAX_LATENESS_MINUTES,
+    J1_PREDICTION_WINDOW,
+    J1_TARGET_LEAD_MINUTES,
     run_daily_prediction_runner,
 )
 from app.j1_pending_selector_v2 import (
     J1_PENDING_SELECTOR_VERSION,
     install_j1_pending_selector_v2,
+)
+from app.prematch_inference import MODEL_VERSION
+from app.prediction_window_policy import (
+    PREDICTION_WINDOW_POLICY_VERSION,
+    authorized_prediction_producer,
+    install_prediction_window_policy,
+    quarantine_invalid_reserved_j1_predictions,
 )
 
 J1_SCHEDULER_VERSION = "j1_scheduler_v2"
@@ -144,11 +154,12 @@ async def run_j1_cycle(
     Runner health is persisted so an HTTP 200 cannot hide an internal J1 failure.
     """
 
-    # Install the pending selector on every scheduler path. This makes the fix
-    # independent of the Render start command: both the original scheduler
-    # module and any compatibility wrapper exclude completed fixture/windows
-    # before applying the per-cycle cap.
+    # Install both operational guards on every scheduler path. The pending
+    # selector prevents completed fixtures from consuming the batch cap. The
+    # prediction-window policy makes j1_45m_v1 writable only inside this
+    # authorized scheduler context.
     install_j1_pending_selector_v2()
+    install_prediction_window_policy()
 
     run_id = _start_run(source)
     connection = engine.connect()
@@ -183,14 +194,30 @@ async def run_j1_cycle(
                     "lock_acquired": False,
                     "reason": "J1_RUNNER_ALREADY_ACTIVE",
                     "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
+                    "prediction_window_policy_version": PREDICTION_WINDOW_POLICY_VERSION,
                 },
             }
 
-        result = await run_daily_prediction_runner(
+        recovery_audit = quarantine_invalid_reserved_j1_predictions(
+            now=datetime.now(timezone.utc),
+            prediction_window=J1_PREDICTION_WINDOW,
+            model_version=MODEL_VERSION,
+            target_lead_minutes=J1_TARGET_LEAD_MINUTES,
             max_lateness_minutes=max_lateness_minutes,
-            max_fixtures=max_fixtures,
         )
+
+        with authorized_prediction_producer(DAILY_PREDICTION_RUNNER_VERSION):
+            result = await run_daily_prediction_runner(
+                max_lateness_minutes=max_lateness_minutes,
+                max_fixtures=max_fixtures,
+            )
+
+        result["prediction_window_policy"] = recovery_audit
         counts = dict(result.get("counts") or {})
+        counts["invalid_reserved_predictions_quarantined"] = int(
+            recovery_audit.get("quarantined_count") or 0
+        )
+        result["counts"] = counts
         selected = int(result.get("selected_fixtures") or 0)
         scheduler_status, scheduler_error = _scheduler_status_from_result(result)
         counts["run_health_status"] = (result.get("run_health") or {}).get("status")
@@ -208,6 +235,7 @@ async def run_j1_cycle(
             "lock_acquired": True,
             "status": scheduler_status,
             "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
+            "prediction_window_policy_version": PREDICTION_WINDOW_POLICY_VERSION,
         }
         return result
     except Exception as exc:
