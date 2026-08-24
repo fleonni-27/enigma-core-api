@@ -14,6 +14,7 @@ from app.upstream_exceptions import register_upstream_exceptions
 
 app.version = "0.25.0"
 logger = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task] = set()
 
 
 async def _run_legacy_score_backfill() -> None:
@@ -28,7 +29,9 @@ async def schedule_legacy_score_backfill() -> None:
     # Do not delay service readiness for historical score enrichment. The task
     # only fills the separate post-match result store; DecisionRecord remains
     # immutable and the dashboard stays read-only.
-    asyncio.create_task(_run_legacy_score_backfill())
+    task = asyncio.create_task(_run_legacy_score_backfill())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 # Replace only the historical controller route; preserve all routes already exposed by app.main.
