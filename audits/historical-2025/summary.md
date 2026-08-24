@@ -1,22 +1,22 @@
 # Auditoria Histórica 2025 — 8 competições
 
-Gerado em: `2026-08-24T11:12:40.187274+00:00`
+Gerado em: `2026-08-24T14:18:54.376580+00:00`
 
 > Escopo: universo retornado/armazenado sob o token/API Sportmonks atual. Não equivale a certificação de cobertura integral da temporada real.
 
-Status: **OK**
+Status: **PARTIAL**
 
-Total alvo observado: **617 fixtures** · snapshots: **617** · training eligible: **617**
+Total alvo observado: **1424 fixtures** · snapshots: **1424** · training eligible: **1663**
 
 | Competição | Fixtures | Snapshots | Elegíveis | Elig.% | FULL_XG | STD_NO_XG | INCOMPLETE | NO_SNAPSHOT | Meses | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| Serie A | 171 | 171 | 171 | 100.00% | 171 | 0 | 0 | 0 | 4/12 | PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE |
-| Serie B | 137 | 137 | 137 | 100.00% | 0 | 137 | 0 | 0 | 3/12 | PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE |
+| Serie A | 330 | 330 | 380 | 115.15% | 380 | 0 | 0 | 0 | 9/12 | PARTIAL_AUDIT |
+| Serie B | 330 | 330 | 380 | 115.15% | 0 | 380 | 0 | 0 | 7/12 | PARTIAL_AUDIT |
 | Copa do Brasil | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/12 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
-| Copa Libertadores | 13 | 13 | 13 | 100.00% | 13 | 0 | 0 | 0 | 3/12 | PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE |
+| Copa Libertadores | 107 | 107 | 155 | 144.86% | 142 | 13 | 0 | 0 | 7/12 | PARTIAL_AUDIT |
 | Copa Sudamericana | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/12 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
-| Premier League | 156 | 156 | 156 | 100.00% | 156 | 0 | 0 | 0 | 4/12 | PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE |
-| La Liga | 140 | 140 | 140 | 100.00% | 140 | 0 | 0 | 0 | 4/12 | PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE |
+| Premier League | 328 | 328 | 378 | 115.24% | 378 | 0 | 0 | 0 | 9/12 | PARTIAL_AUDIT |
+| La Liga | 329 | 329 | 370 | 112.46% | 370 | 0 | 0 | 0 | 9/12 | PARTIAL_AUDIT |
 | Champions League | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/12 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
 
 ## Regras de interpretação
@@ -26,4 +26,4 @@ Total alvo observado: **617 fixtures** · snapshots: **617** · training eligibl
 - `PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE`: todas as fixtures observadas têm snapshot; ainda assim não certifica o universo real da competição.
 - `PARTIAL_AUDIT`: houve falha de chamada, limite ou divergência entre coverage e quality; revisar antes de concluir.
 
-Erros registrados: **0**.
+Erros registrados: **1**.
