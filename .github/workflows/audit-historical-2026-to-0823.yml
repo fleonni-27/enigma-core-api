@@ -1,0 +1,74 @@
+name: Audit Historical 2026 to Aug 23
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-historical-2026-to-0823.yml'
+      - 'scripts/audit_historical_2026_to_0823.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: audit-historical-2026-to-0823
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for Enigma Core API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error \
+              --connect-timeout 15 \
+              --max-time 45 \
+              'https://enigma-core-api.onrender.com/health' \
+              >/tmp/enigma-health.json; then
+              cat /tmp/enigma-health.json
+              exit 0
+            fi
+            echo "API not ready (${attempt}/12); retrying in 10s"
+            sleep 10
+          done
+          exit 1
+
+      - name: Audit 2026 through August 23
+        env:
+          ENIGMA_API_BASE: https://enigma-core-api.onrender.com
+        run: python scripts/audit_historical_2026_to_0823.py
+
+      - name: Publish workflow summary
+        shell: bash
+        run: cat audits/historical-2026-to-0823/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-2026-to-0823-audit
+          path: audits/historical-2026-to-0823/
+          retention-days: 30
+
+      - name: Commit audit snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audits/historical-2026-to-0823/audit.json audits/historical-2026-to-0823/summary.md
+          if git diff --cached --quiet; then
+            echo 'Audit snapshot unchanged; nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'Record 2026 historical audit through August 23'
+          git push origin HEAD:main
