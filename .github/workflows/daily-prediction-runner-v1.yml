@@ -16,17 +16,51 @@ concurrency:
 jobs:
   j1:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
+      - name: Wait for J1 routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Waiting for Enigma Core J1 routes to become available"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error \
+              --connect-timeout 15 \
+              --max-time 45 \
+              "https://enigma-core-api.onrender.com/operations/daily-prediction-runner/status" \
+              >/tmp/j1-status.json; then
+              echo "J1 route is ready on attempt ${attempt}"
+              cat /tmp/j1-status.json
+              exit 0
+            fi
+            echo "J1 route not ready (attempt ${attempt}/12); retrying in 10s"
+            sleep 10
+          done
+          echo "J1 route did not become ready in time"
+          exit 1
+
       - name: Run J1 prediction and decision pipeline
         shell: bash
         run: |
           set -euo pipefail
           echo "Running Enigma Core Daily Prediction Runner V1 (J1 target: kickoff - 45m)"
           curl --fail-with-body \
-            --retry 2 \
+            --retry 6 \
+            --retry-all-errors \
             --retry-delay 20 \
+            --retry-max-time 600 \
             --connect-timeout 30 \
             --max-time 2400 \
             -X POST \
-            "https://enigma-core-api.onrender.com/operations/daily-prediction-runner?max_lateness_minutes=20&max_fixtures=5"
+            "https://enigma-core-api.onrender.com/operations/daily-prediction-runner?max_lateness_minutes=20&max_fixtures=5" \
+            -o /tmp/j1-run.json
+          cat /tmp/j1-run.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/j1-run.json').read_text())
+          if payload.get('status') != 'ok':
+              raise SystemExit(f"daily prediction runner returned non-ok status: {payload.get('status')}")
+          print('Daily Prediction Runner V1 completed with status=ok')
+          PY
