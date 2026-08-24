@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
 from datetime import date
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -8,6 +11,9 @@ from app.config import get_settings
 
 MAX_FIXTURE_PAGES_PER_DATE = 100
 FIXTURE_PAGE_SIZE = 50
+SPORTMONKS_HTTP_MAX_CONNECTIONS = 12
+SPORTMONKS_HTTP_MAX_KEEPALIVE_CONNECTIONS = 6
+SPORTMONKS_HTTP_KEEPALIVE_EXPIRY_SECONDS = 30.0
 
 
 def _pagination(payload: dict[str, Any]) -> dict[str, Any]:
@@ -25,8 +31,87 @@ def _pagination(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class SportmonksClient:
+    """Sportmonks API client with optional cycle-local connection pooling.
+
+    Existing call sites remain compatible: when the client is not used as an
+    async context manager, each public method owns and closes a temporary
+    AsyncClient. Hot paths can use ``async with SportmonksClient()`` so every
+    request in the cycle shares one keep-alive pool and TLS connections.
+    """
+
     def __init__(self) -> None:
         self.settings = get_settings()
+        self._client: httpx.AsyncClient | None = None
+        self._requests = 0
+        self._pooled_requests = 0
+        self._temporary_sessions = 0
+
+    @staticmethod
+    def _limits() -> httpx.Limits:
+        return httpx.Limits(
+            max_connections=SPORTMONKS_HTTP_MAX_CONNECTIONS,
+            max_keepalive_connections=SPORTMONKS_HTTP_MAX_KEEPALIVE_CONNECTIONS,
+            keepalive_expiry=SPORTMONKS_HTTP_KEEPALIVE_EXPIRY_SECONDS,
+        )
+
+    @classmethod
+    def _new_http_client(cls) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            timeout=45.0,
+            limits=cls._limits(),
+            headers={"Accept": "application/json"},
+        )
+
+    async def __aenter__(self) -> "SportmonksClient":
+        if self._client is None:
+            self._client = self._new_http_client()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        client = self._client
+        self._client = None
+        if client is not None:
+            await client.aclose()
+
+    @asynccontextmanager
+    async def _client_scope(self) -> AsyncIterator[tuple[httpx.AsyncClient, bool]]:
+        if self._client is not None:
+            yield self._client, True
+            return
+
+        self._temporary_sessions += 1
+        async with self._new_http_client() as client:
+            yield client, False
+
+    async def _get_json(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        pooled: bool,
+        url: str,
+        params: dict[str, Any],
+        timeout: float,
+    ) -> dict:
+        self._requests += 1
+        if pooled:
+            self._pooled_requests += 1
+        response = await client.get(url, params=params, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+
+    def transport_audit(self) -> dict[str, Any]:
+        return {
+            "requests": int(self._requests),
+            "pooled_requests": int(self._pooled_requests),
+            "temporary_sessions": int(self._temporary_sessions),
+            "managed_pool_active": self._client is not None,
+            "max_connections": SPORTMONKS_HTTP_MAX_CONNECTIONS,
+            "max_keepalive_connections": SPORTMONKS_HTTP_MAX_KEEPALIVE_CONNECTIONS,
+            "keepalive_expiry_seconds": SPORTMONKS_HTTP_KEEPALIVE_EXPIRY_SECONDS,
+        }
 
     async def fixtures_by_date(self, target_date: date) -> dict:
         url = f"{self.settings.sportmonks_base_url}/fixtures/date/{target_date.isoformat()}"
@@ -42,12 +127,16 @@ class SportmonksClient:
         last_pagination: dict[str, Any] = {}
         page = 1
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client_scope() as (client, pooled):
             while page <= MAX_FIXTURE_PAGES_PER_DATE:
                 params = {**base_params, "page": page}
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                payload = response.json()
+                payload = await self._get_json(
+                    client,
+                    pooled=pooled,
+                    url=url,
+                    params=params,
+                    timeout=30.0,
+                )
 
                 if first_payload is None:
                     first_payload = payload
@@ -84,8 +173,6 @@ class SportmonksClient:
                 if not has_more:
                     break
 
-                # If the upstream says another page exists but yields no new
-                # fixtures, abort instead of risking an infinite pagination loop.
                 if new_rows == 0:
                     raise RuntimeError(
                         f"Sportmonks fixture pagination stalled on {target_date.isoformat()} page {page}"
@@ -115,10 +202,14 @@ class SportmonksClient:
             "api_token": self.settings.sportmonks_api_token,
             "include": "market;bookmaker",
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
+        async with self._client_scope() as (client, pooled):
+            return await self._get_json(
+                client,
+                pooled=pooled,
+                url=url,
+                params=params,
+                timeout=30.0,
+            )
 
     async def enriched_fixture(self, fixture_id: int) -> dict:
         url = f"{self.settings.sportmonks_base_url}/fixtures/{fixture_id}"
@@ -129,10 +220,14 @@ class SportmonksClient:
                 "statistics.type;xGFixture.type"
             ),
         }
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
+        async with self._client_scope() as (client, pooled):
+            return await self._get_json(
+                client,
+                pooled=pooled,
+                url=url,
+                params=params,
+                timeout=45.0,
+            )
 
     async def fixture_result(self, fixture_id: int) -> dict:
         url = f"{self.settings.sportmonks_base_url}/fixtures/{fixture_id}"
@@ -140,10 +235,14 @@ class SportmonksClient:
             "api_token": self.settings.sportmonks_api_token,
             "include": "scores;state;participants",
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
+        async with self._client_scope() as (client, pooled):
+            return await self._get_json(
+                client,
+                pooled=pooled,
+                url=url,
+                params=params,
+                timeout=30.0,
+            )
 
 
 # The production app composes the research router through future_batch. Installing
