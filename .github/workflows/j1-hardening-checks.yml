@@ -5,9 +5,11 @@ on:
     paths:
       - "app/daily_prediction_runner_v2.py"
       - "app/decision_engine_v2.py"
+      - "app/inference_runtime_v2.py"
       - "app/j1_scheduler.py"
       - "app/j1_scheduler_routes.py"
       - "tests/test_j1_hardening.py"
+      - "tests/test_inference_runtime_v2.py"
       - ".github/workflows/j1-hardening-checks.yml"
   workflow_dispatch:
 
@@ -30,4 +32,4 @@ jobs:
       - name: Compile application
         run: python -m compileall -q app
       - name: Run J1 hardening unit tests
-        run: python -m unittest tests.test_j1_hardening -v
+        run: python -m unittest tests.test_j1_hardening tests.test_inference_runtime_v2 -v

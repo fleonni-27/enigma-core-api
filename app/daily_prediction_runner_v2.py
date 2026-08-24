@@ -16,6 +16,7 @@ from app.decision_engine import (
 )
 from app.decision_engine_v2 import evaluate_fixture_decision_v2
 from app.forward_test_ledger import persist_evaluated_decision
+from app.inference_runtime_v2 import INFERENCE_RUNTIME_VERSION, InferenceRuntimeV2
 from app.prematch_inference import (
     DEFAULT_HISTORY_DAYS,
     DEFAULT_LOOKBACK_MATCHES,
@@ -23,7 +24,6 @@ from app.prematch_inference import (
     DEFAULT_MIN_HISTORY_MATCHES,
     DEFAULT_MIN_TRAINING_ROWS,
     MODEL_VERSION,
-    generate_and_persist_prematch_prediction,
 )
 from app.sportmonks import SportmonksClient
 
@@ -171,6 +171,14 @@ async def run_daily_prediction_runner(
         max_fixtures=max_fixtures,
     )
     client = SportmonksClient()
+    inference_runtime = InferenceRuntimeV2(
+        history_days=DEFAULT_HISTORY_DAYS,
+        lookback_matches=DEFAULT_LOOKBACK_MATCHES,
+        min_history_matches=DEFAULT_MIN_HISTORY_MATCHES,
+        min_training_rows=DEFAULT_MIN_TRAINING_ROWS,
+        max_training_rows=DEFAULT_MAX_TRAINING_ROWS,
+        class_weight_balanced=False,
+    )
     counts: Counter[str] = Counter()
     items: list[dict[str, Any]] = []
 
@@ -236,18 +244,13 @@ async def run_daily_prediction_runner(
             item["odds"] = {"status": "upstream_failed", "error": exc.__class__.__name__}
 
         try:
-            inference = generate_and_persist_prematch_prediction(
+            inference = inference_runtime.generate_and_persist_prediction(
                 sportmonks_fixture_id=int(fixture.sportmonks_id),
                 prediction_window=J1_PREDICTION_WINDOW,
-                history_days=DEFAULT_HISTORY_DAYS,
-                lookback_matches=DEFAULT_LOOKBACK_MATCHES,
-                min_history_matches=DEFAULT_MIN_HISTORY_MATCHES,
-                min_training_rows=DEFAULT_MIN_TRAINING_ROWS,
-                max_training_rows=DEFAULT_MAX_TRAINING_ROWS,
-                class_weight_balanced=False,
             )
             item["inference"] = {
                 "status": inference.get("status"),
+                "runtime_version": inference.get("runtime_version"),
                 "reason_codes": list(inference.get("reason_codes") or []),
                 "prediction": inference.get("prediction"),
                 "target_feature_audit": inference.get("target_feature_audit"),
@@ -270,7 +273,11 @@ async def run_daily_prediction_runner(
             counts["inference_ready"] += 1
         except Exception as exc:
             counts["inference_failed"] += 1
-            item["inference"] = {"status": "failed", "error": exc.__class__.__name__}
+            item["inference"] = {
+                "status": "failed",
+                "runtime_version": INFERENCE_RUNTIME_VERSION,
+                "error": exc.__class__.__name__,
+            }
             item["status"] = "inference_failed"
             items.append(item)
             continue
@@ -327,6 +334,7 @@ async def run_daily_prediction_runner(
         items.append(item)
 
     health = _run_health(items)
+    runtime_audit = inference_runtime.audit()
     return {
         "status": "ok",
         "version": DAILY_PREDICTION_RUNNER_VERSION,
@@ -334,6 +342,7 @@ async def run_daily_prediction_runner(
         "evaluated_at": now.isoformat(),
         "timezone": BUSINESS_TIMEZONE,
         "run_health": health,
+        "inference_runtime": runtime_audit,
         "window": {
             "name": "J1",
             "target_lead_minutes": J1_TARGET_LEAD_MINUTES,
@@ -348,6 +357,9 @@ async def run_daily_prediction_runner(
             "target_leagues_only": True,
             "prediction_is_immutable_once_persisted": True,
             "prediction_must_be_generated_at_or_after_j1_due": True,
+            "historical_dataset_reused_within_same_j1_cycle": True,
+            "per_fixture_temporal_cutoff_preserved": True,
+            "per_fixture_model_fit_preserved": True,
             "all_selected_1x2_quotes_must_fit_j1_window": True,
             "valid_bet_candidate_is_prioritized_over_market_that_fails_a_gate": True,
             "decision_thresholds_unchanged": True,
@@ -368,6 +380,7 @@ def build_j1_status(*, target_date: date | None = None) -> dict[str, Any]:
     payload["version"] = DAILY_PREDICTION_RUNNER_VERSION
     payload["ledger_source_version"] = LEDGER_SOURCE_VERSION
     payload["decision_engine_version"] = "decision_engine_v2"
+    payload["inference_runtime_version"] = INFERENCE_RUNTIME_VERSION
     return payload
 
 
