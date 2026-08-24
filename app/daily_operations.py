@@ -15,6 +15,11 @@ from app.ingestion import ingest_fixtures_payload
 from app.league_registry import canonical_league
 from app.models import Fixture, OddsSnapshot, Prediction
 from app.odds_ingestion import ingest_prematch_odds_payload
+from app.performance_observatory import (
+    PIPELINE_DAILY_SYNC,
+    record_daily_sync_result,
+    try_persist_pipeline_sample,
+)
 from app.sportmonks import SportmonksClient
 
 DAILY_OPERATIONS_VERSION = "daily_operations_v1"
@@ -200,7 +205,7 @@ async def run_daily_sync(*, target_date: date | None = None, refresh_odds: bool 
 
         transport_audit = client.transport_audit()
 
-    return {
+    response = {
         "status": "ok" if fixture_ingestion.get("status") == "ok" else "partial",
         "version": DAILY_OPERATIONS_VERSION,
         "target_date": effective_date.isoformat(),
@@ -238,6 +243,8 @@ async def run_daily_sync(*, target_date: date | None = None, refresh_odds: bool 
             "unchanged_odds_are_collapsed_without_losing_price_movements": True,
         },
     }
+    response["performance"]["observatory"] = record_daily_sync_result(response)
+    return response
 
 
 def build_daily_status(*, target_date: date | None = None) -> dict:
@@ -306,11 +313,26 @@ async def daily_sync_endpoint(
     target_date: date | None = None,
     refresh_odds: bool = True,
 ) -> dict:
+    endpoint_started = perf_counter()
     try:
         return await run_daily_sync(target_date=target_date, refresh_odds=refresh_odds)
     except ValueError as exc:
+        try_persist_pipeline_sample(
+            pipeline=PIPELINE_DAILY_SYNC,
+            source="daily_operations",
+            status="FAILED",
+            cycle_seconds=perf_counter() - endpoint_started,
+            raw_metrics={"error": exc.__class__.__name__, "target_date": str(target_date)},
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        try_persist_pipeline_sample(
+            pipeline=PIPELINE_DAILY_SYNC,
+            source="daily_operations",
+            status="FAILED",
+            cycle_seconds=perf_counter() - endpoint_started,
+            raw_metrics={"error": exc.__class__.__name__, "target_date": str(target_date)},
+        )
         raise HTTPException(
             status_code=502,
             detail={"status": "failed", "error": exc.__class__.__name__},
