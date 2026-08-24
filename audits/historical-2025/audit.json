@@ -1,0 +1,2163 @@
+{
+  "status": "ok",
+  "version": "historical_2025_audit_v1",
+  "generated_at": "2026-08-24T11:12:40.187274+00:00",
+  "source": "https://enigma-core-api.onrender.com",
+  "year": 2025,
+  "target_leagues": [
+    "Serie A",
+    "Serie B",
+    "Copa do Brasil",
+    "Copa Libertadores",
+    "Copa Sudamericana",
+    "Premier League",
+    "La Liga",
+    "Champions League"
+  ],
+  "scope_note": "Audit describes the universe returned/stored under the current Sportmonks token/API. It does not prove complete real-world season coverage.",
+  "totals": {
+    "fixtures": 617,
+    "snapshots": 617,
+    "training_eligible": 617,
+    "snapshot_coverage_pct": 100.0,
+    "training_eligibility_pct_of_fixtures": 100.0,
+    "errors": 0
+  },
+  "by_league": [
+    {
+      "league": "Serie A",
+      "fixtures": 171,
+      "snapshots": 171,
+      "lineups_fixtures": 171,
+      "statistics_fixtures": 171,
+      "xg_fixtures": 171,
+      "FULL_XG": 171,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 171,
+      "months_present": 4,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 100.0,
+      "lineups_pct": 100.0,
+      "statistics_pct": 100.0,
+      "xg_pct": 100.0,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
+    },
+    {
+      "league": "Serie B",
+      "fixtures": 137,
+      "snapshots": 137,
+      "lineups_fixtures": 137,
+      "statistics_fixtures": 137,
+      "xg_fixtures": 0,
+      "FULL_XG": 0,
+      "STANDARD_NO_XG": 137,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 137,
+      "months_present": 3,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 100.0,
+      "lineups_pct": 100.0,
+      "statistics_pct": 100.0,
+      "xg_pct": 0.0,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
+    },
+    {
+      "league": "Copa do Brasil",
+      "fixtures": 0,
+      "snapshots": 0,
+      "lineups_fixtures": 0,
+      "statistics_fixtures": 0,
+      "xg_fixtures": 0,
+      "FULL_XG": 0,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 0,
+      "months_present": 0,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 0.0,
+      "lineups_pct": 0.0,
+      "statistics_pct": 0.0,
+      "xg_pct": 0.0,
+      "training_eligibility_pct_of_fixtures": 0.0,
+      "training_eligibility_pct_of_snapshots": 0.0,
+      "observed_coverage_status": "ABSENT_IN_CURRENT_TOKEN_SCOPE"
+    },
+    {
+      "league": "Copa Libertadores",
+      "fixtures": 13,
+      "snapshots": 13,
+      "lineups_fixtures": 13,
+      "statistics_fixtures": 13,
+      "xg_fixtures": 13,
+      "FULL_XG": 13,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 13,
+      "months_present": 3,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 100.0,
+      "lineups_pct": 100.0,
+      "statistics_pct": 100.0,
+      "xg_pct": 100.0,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
+    },
+    {
+      "league": "Copa Sudamericana",
+      "fixtures": 0,
+      "snapshots": 0,
+      "lineups_fixtures": 0,
+      "statistics_fixtures": 0,
+      "xg_fixtures": 0,
+      "FULL_XG": 0,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 0,
+      "months_present": 0,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 0.0,
+      "lineups_pct": 0.0,
+      "statistics_pct": 0.0,
+      "xg_pct": 0.0,
+      "training_eligibility_pct_of_fixtures": 0.0,
+      "training_eligibility_pct_of_snapshots": 0.0,
+      "observed_coverage_status": "ABSENT_IN_CURRENT_TOKEN_SCOPE"
+    },
+    {
+      "league": "Premier League",
+      "fixtures": 156,
+      "snapshots": 156,
+      "lineups_fixtures": 156,
+      "statistics_fixtures": 156,
+      "xg_fixtures": 156,
+      "FULL_XG": 156,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 156,
+      "months_present": 4,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 100.0,
+      "lineups_pct": 100.0,
+      "statistics_pct": 100.0,
+      "xg_pct": 100.0,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
+    },
+    {
+      "league": "La Liga",
+      "fixtures": 140,
+      "snapshots": 140,
+      "lineups_fixtures": 140,
+      "statistics_fixtures": 140,
+      "xg_fixtures": 140,
+      "FULL_XG": 140,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 140,
+      "months_present": 4,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 100.0,
+      "lineups_pct": 100.0,
+      "statistics_pct": 100.0,
+      "xg_pct": 100.0,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
+    },
+    {
+      "league": "Champions League",
+      "fixtures": 0,
+      "snapshots": 0,
+      "lineups_fixtures": 0,
+      "statistics_fixtures": 0,
+      "xg_fixtures": 0,
+      "FULL_XG": 0,
+      "STANDARD_NO_XG": 0,
+      "INCOMPLETE": 0,
+      "NO_SNAPSHOT": 0,
+      "training_eligible": 0,
+      "months_present": 0,
+      "months_audited": 12,
+      "quality_scope_mismatches": 0,
+      "errors": [],
+      "snapshot_coverage_pct": 0.0,
+      "lineups_pct": 0.0,
+      "statistics_pct": 0.0,
+      "xg_pct": 0.0,
+      "training_eligibility_pct_of_fixtures": 0.0,
+      "training_eligibility_pct_of_snapshots": 0.0,
+      "observed_coverage_status": "ABSENT_IN_CURRENT_TOKEN_SCOPE"
+    }
+  ],
+  "monthly": [
+    {
+      "month": "2025-01",
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-02",
+      "start_date": "2025-02-01",
+      "end_date": "2025-02-28",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-03",
+      "start_date": "2025-03-01",
+      "end_date": "2025-03-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-04",
+      "start_date": "2025-04-01",
+      "end_date": "2025-04-30",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-05",
+      "start_date": "2025-05-01",
+      "end_date": "2025-05-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-06",
+      "start_date": "2025-06-01",
+      "end_date": "2025-06-30",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-07",
+      "start_date": "2025-07-01",
+      "end_date": "2025-07-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-08",
+      "start_date": "2025-08-01",
+      "end_date": "2025-08-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-09",
+      "start_date": "2025-09-01",
+      "end_date": "2025-09-30",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 33,
+          "snapshots": 33,
+          "lineups_fixtures": 33,
+          "statistics_fixtures": 33,
+          "xg_fixtures": 33,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 33,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 33,
+          "quality_selected_fixtures": 33,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 50,
+          "snapshots": 50,
+          "lineups_fixtures": 50,
+          "statistics_fixtures": 50,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 50,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 50,
+          "quality_selected_fixtures": 50,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 8,
+          "snapshots": 8,
+          "lineups_fixtures": 8,
+          "statistics_fixtures": 8,
+          "xg_fixtures": 8,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 8,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 8,
+          "quality_selected_fixtures": 8,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 30,
+          "snapshots": 30,
+          "lineups_fixtures": 30,
+          "statistics_fixtures": 30,
+          "xg_fixtures": 30,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 30,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 30,
+          "quality_selected_fixtures": 30,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 39,
+          "snapshots": 39,
+          "lineups_fixtures": 39,
+          "statistics_fixtures": 39,
+          "xg_fixtures": 39,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 39,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 39,
+          "quality_selected_fixtures": 39,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-10",
+      "start_date": "2025-10-01",
+      "end_date": "2025-10-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 55,
+          "snapshots": 55,
+          "lineups_fixtures": 55,
+          "statistics_fixtures": 55,
+          "xg_fixtures": 55,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 55,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 55,
+          "quality_selected_fixtures": 55,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 49,
+          "snapshots": 49,
+          "lineups_fixtures": 49,
+          "statistics_fixtures": 49,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 49,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 49,
+          "quality_selected_fixtures": 49,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 4,
+          "snapshots": 4,
+          "lineups_fixtures": 4,
+          "statistics_fixtures": 4,
+          "xg_fixtures": 4,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 4,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 4,
+          "quality_selected_fixtures": 4,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 30,
+          "snapshots": 30,
+          "lineups_fixtures": 30,
+          "statistics_fixtures": 30,
+          "xg_fixtures": 30,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 30,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 30,
+          "quality_selected_fixtures": 30,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 31,
+          "snapshots": 31,
+          "lineups_fixtures": 31,
+          "statistics_fixtures": 31,
+          "xg_fixtures": 31,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 31,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 31,
+          "quality_selected_fixtures": 31,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-11",
+      "start_date": "2025-11-01",
+      "end_date": "2025-11-30",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 63,
+          "snapshots": 63,
+          "lineups_fixtures": 63,
+          "statistics_fixtures": 63,
+          "xg_fixtures": 63,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 63,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 63,
+          "quality_selected_fixtures": 63,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 38,
+          "snapshots": 38,
+          "lineups_fixtures": 38,
+          "statistics_fixtures": 38,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 38,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 38,
+          "quality_selected_fixtures": 38,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 1,
+          "snapshots": 1,
+          "lineups_fixtures": 1,
+          "statistics_fixtures": 1,
+          "xg_fixtures": 1,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 1,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 1,
+          "quality_selected_fixtures": 1,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 40,
+          "snapshots": 40,
+          "lineups_fixtures": 40,
+          "statistics_fixtures": 40,
+          "xg_fixtures": 40,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 40,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 40,
+          "quality_selected_fixtures": 40,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 38,
+          "snapshots": 38,
+          "lineups_fixtures": 38,
+          "statistics_fixtures": 38,
+          "xg_fixtures": 38,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 38,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 38,
+          "quality_selected_fixtures": 38,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "month": "2025-12",
+      "start_date": "2025-12-01",
+      "end_date": "2025-12-31",
+      "coverage_status": "ok",
+      "leagues": {
+        "Serie A": {
+          "league": "Serie A",
+          "fixtures": 20,
+          "snapshots": 20,
+          "lineups_fixtures": 20,
+          "statistics_fixtures": 20,
+          "xg_fixtures": 20,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 20,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 20,
+          "quality_selected_fixtures": 20,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Serie B": {
+          "league": "Serie B",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa do Brasil": {
+          "league": "Copa do Brasil",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Libertadores": {
+          "league": "Copa Libertadores",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Copa Sudamericana": {
+          "league": "Copa Sudamericana",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Premier League": {
+          "league": "Premier League",
+          "fixtures": 56,
+          "snapshots": 56,
+          "lineups_fixtures": 56,
+          "statistics_fixtures": 56,
+          "xg_fixtures": 56,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 56,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 56,
+          "quality_selected_fixtures": 56,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "La Liga": {
+          "league": "La Liga",
+          "fixtures": 32,
+          "snapshots": 32,
+          "lineups_fixtures": 32,
+          "statistics_fixtures": 32,
+          "xg_fixtures": 32,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 32,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 32,
+          "quality_selected_fixtures": 32,
+          "scope_matches_coverage": true,
+          "errors": []
+        },
+        "Champions League": {
+          "league": "Champions League",
+          "fixtures": 0,
+          "snapshots": 0,
+          "lineups_fixtures": 0,
+          "statistics_fixtures": 0,
+          "xg_fixtures": 0,
+          "quality_status": "ok",
+          "profiles": {
+            "FULL_XG": 0,
+            "STANDARD_NO_XG": 0,
+            "INCOMPLETE": 0,
+            "NO_SNAPSHOT": 0
+          },
+          "training_eligible": 0,
+          "quality_selected_fixtures": 0,
+          "scope_matches_coverage": true,
+          "errors": []
+        }
+      },
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "policy": {
+    "read_only": true,
+    "no_backfill_triggered": true,
+    "no_model_retraining_triggered": true,
+    "quality_endpoint": "/quality/features",
+    "coverage_endpoint": "/coverage/data",
+    "quality_limit_per_league_month": 200
+  }
+}
