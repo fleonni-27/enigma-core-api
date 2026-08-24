@@ -106,10 +106,12 @@ class DbPerformanceMigrationTests(unittest.TestCase):
         self.assertTrue(result["startup_fallback_executed"])
         run_release.assert_called_once_with()
 
-    def test_web_entrypoint_contains_release_gate(self) -> None:
+    def test_web_entrypoint_contains_non_blocking_release_maintenance(self) -> None:
         entrypoint = Path("app/main_v015.py").read_text()
         self.assertIn("ensure_database_release_current", entrypoint)
-        self.assertIn("enforce_managed_database_release", entrypoint)
+        self.assertIn("_run_managed_startup_maintenance", entrypoint)
+        self.assertIn("schedule_managed_startup_maintenance", entrypoint)
+        self.assertIn("asyncio.create_task", entrypoint)
 
 
 if __name__ == "__main__":
