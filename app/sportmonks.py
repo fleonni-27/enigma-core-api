@@ -152,7 +152,9 @@ class SportmonksClient:
 from app.outcome_settlement import install_outcome_settlement_routes
 from app.dashboard import install_dashboard_routes
 from app.dashboard_operations import install_dashboard_operations_routes
+from app.dashboard_selection_clarity import install_dashboard_selection_clarity
 
 install_outcome_settlement_routes()
 install_dashboard_routes()
 install_dashboard_operations_routes()
+install_dashboard_selection_clarity()
