@@ -162,10 +162,6 @@ async def run_j1_cycle(
 
     cycle_started = perf_counter()
 
-    # Install both operational guards on every scheduler path. The pending
-    # selector prevents completed fixtures from consuming the batch cap. The
-    # prediction-window policy makes j1_45m_v1 writable only inside this
-    # authorized scheduler context.
     install_j1_pending_selector_v2()
     install_prediction_window_policy()
 
@@ -280,14 +276,33 @@ async def run_j1_cycle(
         connection.close()
 
 
-def main() -> None:
-    result = asyncio.run(
-        run_j1_cycle(
-            source="render_cron",
-            max_lateness_minutes=DEFAULT_MAX_LATENESS_MINUTES,
-            max_fixtures=DEFAULT_MAX_FIXTURES,
-        )
+async def run_primary_operations_cycle() -> dict[str, Any]:
+    result = await run_j1_cycle(
+        source="render_cron",
+        max_lateness_minutes=DEFAULT_MAX_LATENESS_MINUTES,
+        max_fixtures=DEFAULT_MAX_FIXTURES,
     )
+
+    # Render's existing cron still invokes `python -m app.j1_scheduler` even
+    # though render.yaml points at j1_scheduler_v2. Keep Closing/CLV active on
+    # this legacy command until the Render service definition is reconciled.
+    try:
+        from app.odds_window_clv import run_odds_window_clv_cycle
+
+        result["odds_window_clv"] = await run_odds_window_clv_cycle()
+    except Exception as exc:
+        # Closing evidence is valuable but must never invalidate a successful
+        # J1 Prediction/Decision/Ledger cycle.
+        result["odds_window_clv"] = {
+            "status": "failed",
+            "version": "odds_window_clv_v1",
+            "error": exc.__class__.__name__,
+        }
+    return result
+
+
+def main() -> None:
+    result = asyncio.run(run_primary_operations_cycle())
     print(json.dumps(result, ensure_ascii=False, default=str))
     health = str((result.get("run_health") or {}).get("status") or "UNKNOWN")
     if result.get("status") != "ok" or health == "FAILED":
