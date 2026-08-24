@@ -6,11 +6,13 @@ from datetime import date
 
 from fastapi import HTTPException, Query
 
+from app.config import get_settings
 from app.daily_operations import router as daily_operations_router
 from app.daily_prediction_runner_v2 import router as daily_prediction_runner_router
 from app.dashboard_operations_v2 import router as dashboard_operations_v2_router
 from app.dashboard_operations_v2_bulk import install_dashboard_operations_v2_bulk_reads
 from app.dashboard_operations_v2_health import install_dashboard_operations_v2_health
+from app.db_release import ensure_database_release_current
 from app.decision_engine_v2 import router as decision_engine_v2_router
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.internal_endpoint_auth import install_internal_endpoint_auth
@@ -24,6 +26,24 @@ from app.upstream_exceptions import register_upstream_exceptions
 app.version = "0.42.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
+
+
+@app.on_event("startup")
+async def enforce_managed_database_release() -> None:
+    # Preferred path is Render preDeployCommand. This startup gate exists because
+    # an already-created Render service can temporarily lag render.yaml changes.
+    # It is a no-op when Alembic is already at head and blocks readiness if a
+    # required migration itself fails.
+    if str(get_settings().app_env or "").lower() != "production":
+        return
+    result = await asyncio.to_thread(ensure_database_release_current)
+    logger.info(
+        "database release gate status=%s current=%s head=%s migrated=%s",
+        result.get("status"),
+        result.get("current_revision") or result.get("final_revision"),
+        result.get("head_revision"),
+        result.get("migration_executed", result.get("startup_fallback_executed", False)),
+    )
 
 
 async def _run_legacy_score_backfill() -> None:
