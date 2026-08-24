@@ -2,14 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 
 from app import dashboard as dashboard_module
-from app.fixture_results import fixture_results_by_sportmonks_ids
+from app import outcome_settlement as settlement_module
+from app.config import get_settings
+from app.fixture_results import (
+    fixture_results_by_sportmonks_ids,
+    persist_fixture_result,
+)
 from app.models import Fixture, FixtureDataSnapshot
 from app.training_dataset import STAT_NAMES, _as_list, _stat_value
 
-DASHBOARD_CLARITY_VERSION = "dashboard_v1_2_2"
+DASHBOARD_CLARITY_VERSION = "dashboard_v1_2_3"
+MAX_LEGACY_SCORE_BACKFILLS_PER_DASHBOARD_REQUEST = 10
 _installed = False
 _original_recent_records_payload = dashboard_module._recent_records_payload
 
@@ -52,6 +59,17 @@ def _result_from_score(home_goals: int, away_goals: int) -> str:
     return "X"
 
 
+def _fixtures_by_sportmonks_ids(ids: list[int]) -> dict[int, Fixture]:
+    normalized = sorted({int(value) for value in ids})
+    if not normalized:
+        return {}
+    with dashboard_module.SessionLocal() as session:
+        fixtures = session.scalars(
+            select(Fixture).where(Fixture.sportmonks_id.in_(normalized))
+        ).all()
+    return {int(fixture.sportmonks_id): fixture for fixture in fixtures}
+
+
 def _snapshot_score_fallback(
     sportmonks_fixture_ids: list[int],
 ) -> dict[int, dict[str, Any]]:
@@ -92,6 +110,66 @@ def _snapshot_score_fallback(
     return results
 
 
+def _upstream_score_backfill(
+    sportmonks_fixture_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    ids = sorted({int(value) for value in sportmonks_fixture_ids})[
+        :MAX_LEGACY_SCORE_BACKFILLS_PER_DASHBOARD_REQUEST
+    ]
+    if not ids:
+        return {}
+
+    fixtures = _fixtures_by_sportmonks_ids(ids)
+    settings = get_settings()
+    results: dict[int, dict[str, Any]] = {}
+
+    with httpx.Client(timeout=15.0) as client:
+        for sportmonks_id in ids:
+            fixture = fixtures.get(sportmonks_id)
+            if fixture is None:
+                continue
+            try:
+                response = client.get(
+                    f"{settings.sportmonks_base_url}/fixtures/{sportmonks_id}",
+                    params={
+                        "api_token": settings.sportmonks_api_token,
+                        "include": "scores;state;participants",
+                    },
+                )
+                response.raise_for_status()
+                outcome = settlement_module._parse_fixture_outcome(
+                    response.json(),
+                    sportmonks_id,
+                )
+            except Exception:
+                continue
+
+            if outcome.get("status") != "ok":
+                continue
+            score = outcome.get("regulation_score") or {}
+            state = outcome.get("state") or {}
+            home_goals = score.get("home")
+            away_goals = score.get("away")
+            if home_goals is None or away_goals is None:
+                continue
+
+            stored = persist_fixture_result(
+                fixture_id=int(fixture.id),
+                sportmonks_fixture_id=sportmonks_id,
+                home_goals=int(home_goals),
+                away_goals=int(away_goals),
+                actual_result=str(outcome.get("actual_result") or ""),
+                score_source=str(score.get("source") or "SPORTMONKS"),
+                state_id=state.get("id"),
+                state_code=state.get("code"),
+            )
+            record = stored.get("record") or {}
+            if stored.get("status") in {"persisted", "exists"} and record:
+                results[sportmonks_id] = record
+
+    return results
+
+
 def _score_contexts(items: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
     settled_ids = [
         int(item["sportmonks_fixture_id"])
@@ -100,9 +178,15 @@ def _score_contexts(items: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         and item.get("sportmonks_fixture_id") is not None
     ]
     stored = fixture_results_by_sportmonks_ids(settled_ids)
-    missing_ids = [value for value in settled_ids if value not in stored]
-    fallback = _snapshot_score_fallback(missing_ids)
-    return {**fallback, **stored}
+    missing_after_store = [value for value in settled_ids if value not in stored]
+    snapshot = _snapshot_score_fallback(missing_after_store)
+    missing_after_snapshot = [
+        value
+        for value in missing_after_store
+        if value not in snapshot
+    ]
+    upstream = _upstream_score_backfill(missing_after_snapshot)
+    return {**snapshot, **upstream, **stored}
 
 
 def _score_context(
