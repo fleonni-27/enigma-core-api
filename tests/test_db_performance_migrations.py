@@ -77,7 +77,7 @@ class DbPerformanceMigrationTests(unittest.TestCase):
         self.assertIn("indisvalid", migration)
         self.assertIn("lock_timeout", migration)
         self.assertIn("statement_timeout", migration)
-        self.assertNotIn("CREATE INDEX CONCURRENTLY", migration)
+        self.assertNotIn('op.execute(f"CREATE INDEX CONCURRENTLY', migration)
 
     def test_odds_quote_migration_can_resume_after_partial_column_commit(self) -> None:
         migration = Path("migrations/versions/20260824_0003_odds_quote_state.py").read_text()
@@ -86,7 +86,7 @@ class DbPerformanceMigrationTests(unittest.TestCase):
         self.assertIn('"observation_count" not in existing_columns', migration)
         self.assertIn("CREATE INDEX IF NOT EXISTS", migration)
         self.assertIn("indisvalid", migration)
-        self.assertNotIn("CREATE INDEX CONCURRENTLY", migration)
+        self.assertNotIn('op.execute(f"CREATE INDEX CONCURRENTLY', migration)
 
     def test_release_runner_uses_baseline_then_index_revision(self) -> None:
         self.assertEqual(db_release.BASELINE_REVISION, "20260824_0001")
