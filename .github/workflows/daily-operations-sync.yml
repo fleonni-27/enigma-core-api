@@ -10,15 +10,40 @@ on:
     - cron: "0 15 * * *"
     - cron: "0 20 * * *"
 
+concurrency:
+  group: daily-operations-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Resolve Sao Paulo date
         id: date
         shell: bash
         run: echo "today=$(TZ=America/Sao_Paulo date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for operations routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Waiting for Enigma Core operations routes to become available"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error \
+              --connect-timeout 15 \
+              --max-time 45 \
+              "https://enigma-core-api.onrender.com/operations/today" \
+              >/tmp/operations-today.json; then
+              echo "Operations route is ready on attempt ${attempt}"
+              cat /tmp/operations-today.json
+              exit 0
+            fi
+            echo "Operations route not ready (attempt ${attempt}/12); retrying in 10s"
+            sleep 10
+          done
+          echo "Operations route did not become ready in time"
+          exit 1
 
       - name: Sync fixtures and prematch odds
         shell: bash
@@ -28,9 +53,22 @@ jobs:
           set -euo pipefail
           echo "Syncing Enigma Core for ${TARGET_DATE} (America/Sao_Paulo)"
           curl --fail-with-body \
-            --retry 3 \
-            --retry-delay 10 \
+            --retry 6 \
+            --retry-all-errors \
+            --retry-delay 20 \
+            --retry-max-time 600 \
             --connect-timeout 30 \
             --max-time 1500 \
             -X POST \
-            "https://enigma-core-api.onrender.com/operations/daily-sync?target_date=${TARGET_DATE}&refresh_odds=true"
+            "https://enigma-core-api.onrender.com/operations/daily-sync?target_date=${TARGET_DATE}&refresh_odds=true" \
+            -o /tmp/daily-sync.json
+          cat /tmp/daily-sync.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/daily-sync.json').read_text())
+          if payload.get('status') != 'ok':
+              raise SystemExit(f"daily sync returned non-ok status: {payload.get('status')}")
+          print('Daily Operations Sync completed with status=ok')
+          PY
