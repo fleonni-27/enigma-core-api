@@ -46,11 +46,11 @@ class OddsSnapshot(Base):
     odd: Mapped[Decimal] = mapped_column(Numeric(10, 4))
     source: Mapped[str] = mapped_column(String(80), default="sportmonks")
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # fetched_at is the first observation time for this price state. Repeated
-    # observations of the same price update last_seen_at instead of inserting a
-    # new row, so real price movements remain event rows while freshness is kept.
+    # first_seen_at marks when this price state appeared. fetched_at remains the
+    # latest time the same state was observed, preserving every existing caller's
+    # quote-freshness semantics without storing repeated identical rows.
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     observation_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     snapshot_window: Mapped[str | None] = mapped_column(String(30))
 
