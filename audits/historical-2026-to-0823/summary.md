@@ -1,22 +1,22 @@
 # Auditoria Histórica 2026 — até 23/08 — 8 competições
 
-Gerado em: `2026-08-24T14:34:33.526389+00:00`
+Gerado em: `2026-08-24T16:00:12.318917+00:00`
 
 > Escopo: universo retornado/armazenado sob o token/API Sportmonks atual até 23/08/2026. Não equivale a certificação de cobertura integral das competições reais.
 
-Status: **OK**
+Status: **PARTIAL**
 
-Total alvo observado: **789 fixtures** · snapshots: **663** · training eligible: **656**
+Total alvo observado: **802 fixtures** · snapshots: **663** · training eligible: **846**
 
 | Competição | Fixtures | Snapshots | Elegíveis | Elig.% | FULL_XG | STD_NO_XG | INCOMPLETE | NO_SNAPSHOT | Meses c/ dados | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| Serie A | 186 | 154 | 150 | 80.65% | 150 | 0 | 4 | 32 | 6/8 | PRESENT_WITH_MISSING_SNAPSHOTS |
-| Serie B | 185 | 99 | 97 | 52.43% | 0 | 97 | 2 | 86 | 5/8 | PRESENT_WITH_MISSING_SNAPSHOTS |
+| Serie A | 189 | 154 | 150 | 79.37% | 150 | 0 | 4 | 35 | 6/8 | PARTIAL_AUDIT |
+| Serie B | 187 | 99 | 146 | 78.07% | 0 | 146 | 2 | 88 | 5/8 | PARTIAL_AUDIT |
 | Copa do Brasil | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/8 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
-| Copa Libertadores | 91 | 90 | 90 | 98.90% | 90 | 0 | 0 | 1 | 4/8 | PRESENT_WITH_MISSING_SNAPSHOTS |
+| Copa Libertadores | 91 | 90 | 140 | 153.85% | 140 | 0 | 0 | 1 | 4/8 | PARTIAL_AUDIT |
 | Copa Sudamericana | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/8 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
-| Premier League | 157 | 153 | 153 | 97.45% | 153 | 0 | 0 | 4 | 5/8 | PRESENT_WITH_MISSING_SNAPSHOTS |
-| La Liga | 170 | 167 | 166 | 97.65% | 166 | 0 | 1 | 3 | 5/8 | PRESENT_WITH_MISSING_SNAPSHOTS |
+| Premier League | 162 | 153 | 194 | 119.75% | 194 | 0 | 0 | 9 | 5/8 | PARTIAL_AUDIT |
+| La Liga | 173 | 167 | 216 | 124.86% | 216 | 0 | 1 | 6 | 5/8 | PARTIAL_AUDIT |
 | Champions League | 0 | 0 | 0 | 0.00% | 0 | 0 | 0 | 0 | 0/8 | ABSENT_IN_CURRENT_TOKEN_SCOPE |
 
-Erros registrados: **0**.
+Erros registrados: **2**.
