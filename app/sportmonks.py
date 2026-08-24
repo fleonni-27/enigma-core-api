@@ -150,11 +150,13 @@ class SportmonksClient:
 # sub-routers here keeps that legacy composition backward-compatible without
 # introducing a second top-level FastAPI app dependency.
 from app.outcome_settlement import install_outcome_settlement_routes
+from app.outcome_score_capture import install_outcome_score_capture
 from app.dashboard import install_dashboard_routes
 from app.dashboard_operations import install_dashboard_operations_routes
 from app.dashboard_selection_clarity import install_dashboard_selection_clarity
 
 install_outcome_settlement_routes()
+install_outcome_score_capture()
 install_dashboard_routes()
 install_dashboard_operations_routes()
 install_dashboard_selection_clarity()
