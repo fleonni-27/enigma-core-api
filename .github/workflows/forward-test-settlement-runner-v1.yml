@@ -7,6 +7,10 @@ on:
     # The API itself verifies that a fixture is finished before settlement.
     - cron: "7,37 * * * *"
 
+permissions:
+  contents: read
+  id-token: write
+
 concurrency:
   group: forward-test-settlement-runner-v1
   cancel-in-progress: false
@@ -16,6 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Mint Enigma OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=enigma-core-api")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"${response}")"
+          echo "::add-mask::${token}"
+          echo "token=${token}" >> "$GITHUB_OUTPUT"
+
       - name: Wait for settlement route
         shell: bash
         run: |
@@ -38,16 +54,18 @@ jobs:
 
       - name: Settle pending forward-test records
         shell: bash
+        env:
+          ENIGMA_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -euo pipefail
           echo "Running Enigma Core Outcome Settlement V1"
           curl --fail-with-body \
             --retry 6 \
-            --retry-all-errors \
             --retry-delay 20 \
             --retry-max-time 600 \
             --connect-timeout 30 \
             --max-time 900 \
+            -H "Authorization: Bearer ${ENIGMA_OIDC_TOKEN}" \
             -X POST \
             "https://enigma-core-api.onrender.com/research/forward-test/settle/pending?limit=25" \
             -o /tmp/settlement-run.json
