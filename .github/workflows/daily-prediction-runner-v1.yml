@@ -3,11 +3,11 @@ name: Daily Prediction Runner V1
 on:
   workflow_dispatch:
   schedule:
-    # J1 target is kickoff - 45 minutes. The runner never executes early;
-    # it handles the first scheduler tick after J1 becomes due.
+    # GitHub Actions is the HTTP fallback; Render cron is the primary scheduler.
+    # J1 target remains kickoff - 45 minutes and the backend never executes early.
     # America/Sao_Paulo is UTC-3. These windows cover 07:00-23:59 local time.
-    - cron: "*/15 10-23 * * *"
-    - cron: "*/15 0-2 * * *"
+    - cron: "*/10 10-23 * * *"
+    - cron: "*/10 0-2 * * *"
 
 concurrency:
   group: daily-prediction-runner-v1
@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Running Enigma Core Daily Prediction Runner V1 (J1 target: kickoff - 45m)"
+          echo "Running Enigma Core J1 pipeline (target: kickoff - 45m)"
           curl --fail-with-body \
             --retry 6 \
             --retry-all-errors \
@@ -62,5 +62,13 @@ jobs:
           payload = json.loads(Path('/tmp/j1-run.json').read_text())
           if payload.get('status') != 'ok':
               raise SystemExit(f"daily prediction runner returned non-ok status: {payload.get('status')}")
-          print('Daily Prediction Runner V1 completed with status=ok')
+
+          health = (payload.get('run_health') or {}).get('status')
+          reasons = (payload.get('run_health') or {}).get('reason_codes') or []
+          print(f"J1 run health={health}; reasons={reasons}")
+          if health == 'FAILED':
+              raise SystemExit(f"J1 pipeline failed internally: {reasons}")
+          if health in {'DEGRADED', 'REVIEW'}:
+              print(f"::warning::J1 pipeline health={health}: {reasons}")
+          print('Daily Prediction Runner completed without fatal runner health')
           PY
