@@ -1,7 +1,7 @@
 {
-  "status": "partial",
+  "status": "ok",
   "version": "historical_2025_audit_v1",
-  "generated_at": "2026-08-24T14:18:54.376580+00:00",
+  "generated_at": "2026-08-24T14:25:44.051402+00:00",
   "source": "https://enigma-core-api.onrender.com",
   "year": 2025,
   "target_leagues": [
@@ -16,65 +16,61 @@
   ],
   "scope_note": "Audit describes the universe returned/stored under the current Sportmonks token/API. It does not prove complete real-world season coverage.",
   "totals": {
-    "fixtures": 1424,
-    "snapshots": 1424,
+    "fixtures": 1663,
+    "snapshots": 1663,
     "training_eligible": 1663,
     "snapshot_coverage_pct": 100.0,
-    "training_eligibility_pct_of_fixtures": 116.78,
-    "errors": 1
+    "training_eligibility_pct_of_fixtures": 100.0,
+    "errors": 0
   },
   "by_league": [
     {
       "league": "Serie A",
-      "fixtures": 330,
-      "snapshots": 330,
-      "lineups_fixtures": 330,
-      "statistics_fixtures": 330,
-      "xg_fixtures": 330,
+      "fixtures": 380,
+      "snapshots": 380,
+      "lineups_fixtures": 380,
+      "statistics_fixtures": 380,
+      "xg_fixtures": 380,
       "FULL_XG": 380,
       "STANDARD_NO_XG": 0,
       "INCOMPLETE": 0,
       "NO_SNAPSHOT": 0,
       "training_eligible": 380,
-      "months_present": 9,
+      "months_present": 10,
       "months_audited": 12,
-      "quality_scope_mismatches": 1,
-      "errors": [
-        "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-      ],
+      "quality_scope_mismatches": 0,
+      "errors": [],
       "snapshot_coverage_pct": 100.0,
       "lineups_pct": 100.0,
       "statistics_pct": 100.0,
       "xg_pct": 100.0,
-      "training_eligibility_pct_of_fixtures": 115.15,
-      "training_eligibility_pct_of_snapshots": 115.15,
-      "observed_coverage_status": "PARTIAL_AUDIT"
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
     },
     {
       "league": "Serie B",
-      "fixtures": 330,
-      "snapshots": 330,
-      "lineups_fixtures": 330,
-      "statistics_fixtures": 330,
+      "fixtures": 380,
+      "snapshots": 380,
+      "lineups_fixtures": 380,
+      "statistics_fixtures": 380,
       "xg_fixtures": 0,
       "FULL_XG": 0,
       "STANDARD_NO_XG": 380,
       "INCOMPLETE": 0,
       "NO_SNAPSHOT": 0,
       "training_eligible": 380,
-      "months_present": 7,
+      "months_present": 8,
       "months_audited": 12,
-      "quality_scope_mismatches": 1,
-      "errors": [
-        "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-      ],
+      "quality_scope_mismatches": 0,
+      "errors": [],
       "snapshot_coverage_pct": 100.0,
       "lineups_pct": 100.0,
       "statistics_pct": 100.0,
       "xg_pct": 0.0,
-      "training_eligibility_pct_of_fixtures": 115.15,
-      "training_eligibility_pct_of_snapshots": 115.15,
-      "observed_coverage_status": "PARTIAL_AUDIT"
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
     },
     {
       "league": "Copa do Brasil",
@@ -102,29 +98,27 @@
     },
     {
       "league": "Copa Libertadores",
-      "fixtures": 107,
-      "snapshots": 107,
-      "lineups_fixtures": 107,
-      "statistics_fixtures": 107,
-      "xg_fixtures": 107,
+      "fixtures": 155,
+      "snapshots": 155,
+      "lineups_fixtures": 155,
+      "statistics_fixtures": 155,
+      "xg_fixtures": 142,
       "FULL_XG": 142,
       "STANDARD_NO_XG": 13,
       "INCOMPLETE": 0,
       "NO_SNAPSHOT": 0,
       "training_eligible": 155,
-      "months_present": 7,
+      "months_present": 8,
       "months_audited": 12,
-      "quality_scope_mismatches": 1,
-      "errors": [
-        "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-      ],
+      "quality_scope_mismatches": 0,
+      "errors": [],
       "snapshot_coverage_pct": 100.0,
       "lineups_pct": 100.0,
       "statistics_pct": 100.0,
-      "xg_pct": 100.0,
-      "training_eligibility_pct_of_fixtures": 144.86,
-      "training_eligibility_pct_of_snapshots": 144.86,
-      "observed_coverage_status": "PARTIAL_AUDIT"
+      "xg_pct": 91.61,
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
     },
     {
       "league": "Copa Sudamericana",
@@ -152,55 +146,51 @@
     },
     {
       "league": "Premier League",
-      "fixtures": 328,
-      "snapshots": 328,
-      "lineups_fixtures": 328,
-      "statistics_fixtures": 328,
-      "xg_fixtures": 328,
+      "fixtures": 378,
+      "snapshots": 378,
+      "lineups_fixtures": 378,
+      "statistics_fixtures": 378,
+      "xg_fixtures": 378,
       "FULL_XG": 378,
       "STANDARD_NO_XG": 0,
       "INCOMPLETE": 0,
       "NO_SNAPSHOT": 0,
       "training_eligible": 378,
-      "months_present": 9,
+      "months_present": 10,
       "months_audited": 12,
-      "quality_scope_mismatches": 1,
-      "errors": [
-        "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-      ],
+      "quality_scope_mismatches": 0,
+      "errors": [],
       "snapshot_coverage_pct": 100.0,
       "lineups_pct": 100.0,
       "statistics_pct": 100.0,
       "xg_pct": 100.0,
-      "training_eligibility_pct_of_fixtures": 115.24,
-      "training_eligibility_pct_of_snapshots": 115.24,
-      "observed_coverage_status": "PARTIAL_AUDIT"
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
     },
     {
       "league": "La Liga",
-      "fixtures": 329,
-      "snapshots": 329,
-      "lineups_fixtures": 329,
-      "statistics_fixtures": 329,
-      "xg_fixtures": 329,
+      "fixtures": 370,
+      "snapshots": 370,
+      "lineups_fixtures": 370,
+      "statistics_fixtures": 370,
+      "xg_fixtures": 370,
       "FULL_XG": 370,
       "STANDARD_NO_XG": 0,
       "INCOMPLETE": 0,
       "NO_SNAPSHOT": 0,
       "training_eligible": 370,
-      "months_present": 9,
+      "months_present": 10,
       "months_audited": 12,
-      "quality_scope_mismatches": 1,
-      "errors": [
-        "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-      ],
+      "quality_scope_mismatches": 0,
+      "errors": [],
       "snapshot_coverage_pct": 100.0,
       "lineups_pct": 100.0,
       "statistics_pct": 100.0,
       "xg_pct": 100.0,
-      "training_eligibility_pct_of_fixtures": 112.46,
-      "training_eligibility_pct_of_snapshots": 112.46,
-      "observed_coverage_status": "PARTIAL_AUDIT"
+      "training_eligibility_pct_of_fixtures": 100.0,
+      "training_eligibility_pct_of_snapshots": 100.0,
+      "observed_coverage_status": "PRESENT_AND_SNAPSHOT_COMPLETE_IN_OBSERVED_SCOPE"
     },
     {
       "league": "Champions League",
@@ -715,15 +705,15 @@
       "month": "2025-04",
       "start_date": "2025-04-01",
       "end_date": "2025-04-30",
-      "coverage_status": "failed",
+      "coverage_status": "ok",
       "leagues": {
         "Serie A": {
           "league": "Serie A",
-          "fixtures": 0,
-          "snapshots": 0,
-          "lineups_fixtures": 0,
-          "statistics_fixtures": 0,
-          "xg_fixtures": 0,
+          "fixtures": 50,
+          "snapshots": 50,
+          "lineups_fixtures": 50,
+          "statistics_fixtures": 50,
+          "xg_fixtures": 50,
           "quality_status": "ok",
           "profiles": {
             "FULL_XG": 50,
@@ -733,17 +723,15 @@
           },
           "training_eligible": 50,
           "quality_selected_fixtures": 50,
-          "scope_matches_coverage": false,
-          "errors": [
-            "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-          ]
+          "scope_matches_coverage": true,
+          "errors": []
         },
         "Serie B": {
           "league": "Serie B",
-          "fixtures": 0,
-          "snapshots": 0,
-          "lineups_fixtures": 0,
-          "statistics_fixtures": 0,
+          "fixtures": 50,
+          "snapshots": 50,
+          "lineups_fixtures": 50,
+          "statistics_fixtures": 50,
           "xg_fixtures": 0,
           "quality_status": "ok",
           "profiles": {
@@ -754,10 +742,8 @@
           },
           "training_eligible": 50,
           "quality_selected_fixtures": 50,
-          "scope_matches_coverage": false,
-          "errors": [
-            "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-          ]
+          "scope_matches_coverage": true,
+          "errors": []
         },
         "Copa do Brasil": {
           "league": "Copa do Brasil",
@@ -780,11 +766,11 @@
         },
         "Copa Libertadores": {
           "league": "Copa Libertadores",
-          "fixtures": 0,
-          "snapshots": 0,
-          "lineups_fixtures": 0,
-          "statistics_fixtures": 0,
-          "xg_fixtures": 0,
+          "fixtures": 48,
+          "snapshots": 48,
+          "lineups_fixtures": 48,
+          "statistics_fixtures": 48,
+          "xg_fixtures": 35,
           "quality_status": "ok",
           "profiles": {
             "FULL_XG": 35,
@@ -794,10 +780,8 @@
           },
           "training_eligible": 48,
           "quality_selected_fixtures": 48,
-          "scope_matches_coverage": false,
-          "errors": [
-            "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-          ]
+          "scope_matches_coverage": true,
+          "errors": []
         },
         "Copa Sudamericana": {
           "league": "Copa Sudamericana",
@@ -820,11 +804,11 @@
         },
         "Premier League": {
           "league": "Premier League",
-          "fixtures": 0,
-          "snapshots": 0,
-          "lineups_fixtures": 0,
-          "statistics_fixtures": 0,
-          "xg_fixtures": 0,
+          "fixtures": 50,
+          "snapshots": 50,
+          "lineups_fixtures": 50,
+          "statistics_fixtures": 50,
+          "xg_fixtures": 50,
           "quality_status": "ok",
           "profiles": {
             "FULL_XG": 50,
@@ -834,18 +818,16 @@
           },
           "training_eligible": 50,
           "quality_selected_fixtures": 50,
-          "scope_matches_coverage": false,
-          "errors": [
-            "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-          ]
+          "scope_matches_coverage": true,
+          "errors": []
         },
         "La Liga": {
           "league": "La Liga",
-          "fixtures": 0,
-          "snapshots": 0,
-          "lineups_fixtures": 0,
-          "statistics_fixtures": 0,
-          "xg_fixtures": 0,
+          "fixtures": 41,
+          "snapshots": 41,
+          "lineups_fixtures": 41,
+          "statistics_fixtures": 41,
+          "xg_fixtures": 41,
           "quality_status": "ok",
           "profiles": {
             "FULL_XG": 41,
@@ -855,10 +837,8 @@
           },
           "training_eligible": 41,
           "quality_selected_fixtures": 41,
-          "scope_matches_coverage": false,
-          "errors": [
-            "QUALITY_SCOPE_DIFFERS_FROM_COVERAGE"
-          ]
+          "scope_matches_coverage": true,
+          "errors": []
         },
         "Champions League": {
           "league": "Champions League",
@@ -880,12 +860,7 @@
           "errors": []
         }
       },
-      "errors": [
-        {
-          "stage": "coverage",
-          "error": "GET failed after 4 attempts: https://enigma-core-api.onrender.com/coverage/data?start_date=2025-04-01&end_date=2025-04-30: HTTP Error 502: Bad Gateway"
-        }
-      ]
+      "errors": []
     },
     {
       "month": "2025-05",
@@ -2176,13 +2151,7 @@
       "errors": []
     }
   ],
-  "errors": [
-    {
-      "month": "2025-04",
-      "stage": "coverage",
-      "error": "GET failed after 4 attempts: https://enigma-core-api.onrender.com/coverage/data?start_date=2025-04-01&end_date=2025-04-30: HTTP Error 502: Bad Gateway"
-    }
-  ],
+  "errors": [],
   "policy": {
     "read_only": true,
     "no_backfill_triggered": true,
