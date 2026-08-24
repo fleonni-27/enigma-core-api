@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from app.j1_scheduler_v2 import run_primary_operations_cycle
+from app.models import Fixture
 from app.odds_window_clv import (
     _clv_payload,
     _complete_1x2_markets,
@@ -12,7 +14,6 @@ from app.odds_window_clv import (
     daily_window,
     j1_window,
 )
-from app.j1_scheduler_v2 import run_primary_operations_cycle
 
 
 class OddsWindowCLVTests(unittest.IsolatedAsyncioTestCase):
@@ -30,7 +31,12 @@ class OddsWindowCLVTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_window_names_use_sao_paulo_match_date(self) -> None:
-        fixture = SimpleNamespace(starts_at=datetime(2026, 8, 25, 1, 30, tzinfo=timezone.utc))
+        fixture = Fixture(
+            sportmonks_id=1,
+            home_team="Home FC",
+            away_team="Away FC",
+            starts_at=datetime(2026, 8, 25, 1, 30, tzinfo=timezone.utc),
+        )
         self.assertEqual(daily_window(fixture), "daily_20260824")
         self.assertEqual(j1_window(fixture), "j1_45m_20260824")
         self.assertEqual(closing_window(fixture), "closing_20260824")
