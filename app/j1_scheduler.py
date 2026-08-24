@@ -16,6 +16,10 @@ from app.daily_prediction_runner_v2 import (
     DEFAULT_MAX_LATENESS_MINUTES,
     run_daily_prediction_runner,
 )
+from app.j1_pending_selector_v2 import (
+    J1_PENDING_SELECTOR_VERSION,
+    install_j1_pending_selector_v2,
+)
 
 J1_SCHEDULER_VERSION = "j1_scheduler_v2"
 J1_OPERATION_NAME = "DAILY_PREDICTION_J1"
@@ -140,6 +144,12 @@ async def run_j1_cycle(
     Runner health is persisted so an HTTP 200 cannot hide an internal J1 failure.
     """
 
+    # Install the pending selector on every scheduler path. This makes the fix
+    # independent of the Render start command: both the original scheduler
+    # module and any compatibility wrapper exclude completed fixture/windows
+    # before applying the per-cycle cap.
+    install_j1_pending_selector_v2()
+
     run_id = _start_run(source)
     connection = engine.connect()
     lock_acquired = False
@@ -172,6 +182,7 @@ async def run_j1_cycle(
                     "run_id": run_id,
                     "lock_acquired": False,
                     "reason": "J1_RUNNER_ALREADY_ACTIVE",
+                    "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
                 },
             }
 
@@ -196,6 +207,7 @@ async def run_j1_cycle(
             "run_id": run_id,
             "lock_acquired": True,
             "status": scheduler_status,
+            "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
         }
         return result
     except Exception as exc:
