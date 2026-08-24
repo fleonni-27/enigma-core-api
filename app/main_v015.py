@@ -1,15 +1,35 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import date
 
 from fastapi import HTTPException, Query
 
 from app.historical_controller_v2 import run_historical_controller_v2
 from app.main import app
+from app.outcome_score_capture import backfill_missing_settled_fixture_results
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
 app.version = "0.25.0"
+logger = logging.getLogger(__name__)
+
+
+async def _run_legacy_score_backfill() -> None:
+    try:
+        await backfill_missing_settled_fixture_results(limit=25)
+    except Exception:
+        logger.exception("legacy settled fixture score backfill failed")
+
+
+@app.on_event("startup")
+async def schedule_legacy_score_backfill() -> None:
+    # Do not delay service readiness for historical score enrichment. The task
+    # only fills the separate post-match result store; DecisionRecord remains
+    # immutable and the dashboard stays read-only.
+    asyncio.create_task(_run_legacy_score_backfill())
+
 
 # Replace only the historical controller route; preserve all routes already exposed by app.main.
 app.router.routes = [
