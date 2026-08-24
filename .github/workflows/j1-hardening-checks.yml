@@ -15,6 +15,10 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      APP_ENV: test
+      DATABASE_URL: "sqlite+pysqlite:///:memory:"
+      SPORTMONKS_API_TOKEN: "ci-test-token"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
