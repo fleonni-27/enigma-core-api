@@ -15,10 +15,11 @@ from app.historical_controller_v2 import run_historical_controller_v2
 from app.j1_scheduler_routes import install_j1_scheduler_routes
 from app.main import app
 from app.outcome_score_capture import backfill_missing_settled_fixture_results
+from app.prediction_window_policy import install_prediction_window_policy
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.37.0"
+app.version = "0.39.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
@@ -132,6 +133,11 @@ def probability_calibration_v1_endpoint(
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
+
+# Install the reserved prediction-window policy before exposing mutable routes.
+# The public inference endpoint fails fast on j1_45m_v1, while the database
+# mapper remains the final integrity boundary for every ORM insert/update path.
+install_prediction_window_policy()
 
 # Patch the HTTP J1 endpoint through the same advisory lock used by the Render
 # cron, then enrich Operations V2 with the persisted scheduler heartbeat.
