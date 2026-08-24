@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import DateTime, Float, Integer, JSON, String, func, select
+from sqlalchemy import DateTime, Float, Integer, JSON, String, func, or_, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, SessionLocal
@@ -253,6 +253,7 @@ def build_performance_summary(
     *,
     pipeline: str | None = None,
     lookback_hours: int = DEFAULT_LOOKBACK_HOURS,
+    include_idle: bool = False,
 ) -> dict[str, Any]:
     if lookback_hours < 1 or lookback_hours > MAX_LOOKBACK_HOURS:
         raise ValueError(f"lookback_hours must be between 1 and {MAX_LOOKBACK_HOURS}")
@@ -265,6 +266,16 @@ def build_performance_summary(
     where_clauses: list[Any] = [PipelinePerformanceSample.observed_at >= since]
     if normalized_pipeline is not None:
         where_clauses.append(PipelinePerformanceSample.pipeline == normalized_pipeline)
+    if not include_idle:
+        # The J1 cron runs every minute, and most cycles are legitimately IDLE.
+        # Excluding those by default prevents no-work heartbeats from collapsing
+        # active J1 p50/p95/p99 toward near-zero while failures remain visible.
+        where_clauses.append(
+            or_(
+                PipelinePerformanceSample.pipeline != PIPELINE_J1,
+                PipelinePerformanceSample.status != "IDLE",
+            )
+        )
 
     metric_columns = {
         "cycle_seconds": PipelinePerformanceSample.cycle_seconds,
@@ -327,7 +338,10 @@ def build_performance_summary(
             "since": since.isoformat(),
             "until": until.isoformat(),
         },
-        "filter": {"pipeline": normalized_pipeline},
+        "filter": {
+            "pipeline": normalized_pipeline,
+            "include_idle": include_idle,
+        },
         "samples": {
             "total": total,
             "by_pipeline": pipeline_counts,
@@ -366,6 +380,8 @@ def build_performance_summary(
             "telemetry_failure_breaks_pipeline": False,
             "tail_percentiles_always_include_sample_count": True,
             "raw_metrics_persisted_for_future_analysis": True,
+            "idle_j1_excluded_from_percentiles_by_default": True,
+            "failed_j1_cycles_remain_in_default_percentiles": True,
         },
     }
 
@@ -378,11 +394,13 @@ def performance_summary_endpoint(
         ge=1,
         le=MAX_LOOKBACK_HOURS,
     ),
+    include_idle: bool = Query(default=False),
 ) -> dict[str, Any]:
     try:
         return build_performance_summary(
             pipeline=pipeline,
             lookback_hours=lookback_hours,
+            include_idle=include_idle,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
