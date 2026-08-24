@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from time import perf_counter
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import select
 
 from app import daily_prediction_runner as legacy
+from app.database import SessionLocal
 from app.decision_engine import (
     DEFAULT_MAX_OVERROUND,
     DEFAULT_MAX_QUOTE_SPAN_SECONDS,
@@ -15,7 +19,11 @@ from app.decision_engine import (
     DEFAULT_MIN_EXPECTED_VALUE,
 )
 from app.decision_engine_v2 import evaluate_fixture_decision_v2
-from app.forward_test_ledger import persist_evaluated_decision
+from app.forward_test_ledger import (
+    DecisionRecord,
+    ensure_forward_test_schema,
+    persist_evaluated_decision,
+)
 from app.inference_runtime_v2 import INFERENCE_RUNTIME_VERSION, InferenceRuntimeV2
 from app.prematch_inference import (
     DEFAULT_HISTORY_DAYS,
@@ -36,6 +44,7 @@ J1_SNAPSHOT_PREFIX = legacy.J1_SNAPSHOT_PREFIX
 DEFAULT_MAX_LATENESS_MINUTES = legacy.DEFAULT_MAX_LATENESS_MINUTES
 DEFAULT_MAX_FIXTURES = legacy.DEFAULT_MAX_FIXTURES
 MAX_FIXTURES_PER_RUN = legacy.MAX_FIXTURES_PER_RUN
+DEFAULT_J1_UPSTREAM_CONCURRENCY = 4
 
 router = APIRouter(prefix="/operations", tags=["operations"])
 
@@ -154,6 +163,72 @@ def _run_health(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _recorded_fixture_windows(fixtures: list[Any]) -> set[tuple[int, str]]:
+    if not fixtures:
+        return set()
+
+    ensure_forward_test_schema()
+    fixture_ids = [int(fixture.id) for fixture in fixtures]
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(DecisionRecord.fixture_id, DecisionRecord.snapshot_window).where(
+                DecisionRecord.fixture_id.in_(fixture_ids),
+                DecisionRecord.source == LEDGER_SOURCE_VERSION,
+            )
+        ).all()
+    return {(int(fixture_id), str(snapshot_window)) for fixture_id, snapshot_window in rows}
+
+
+async def _fetch_j1_upstream(
+    client: SportmonksClient,
+    fixtures: list[Any],
+    *,
+    concurrency: int = DEFAULT_J1_UPSTREAM_CONCURRENCY,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    if concurrency < 1 or concurrency > 12:
+        raise ValueError("concurrency must be between 1 and 12")
+
+    semaphore = asyncio.Semaphore(concurrency)
+    cycle_started = perf_counter()
+
+    async def request(kind: str, fixture_id: int) -> dict[str, Any]:
+        async with semaphore:
+            started = perf_counter()
+            try:
+                if kind == "enriched":
+                    payload = await client.enriched_fixture(fixture_id)
+                else:
+                    payload = await client.prematch_odds_by_fixture(fixture_id)
+                return {
+                    "status": "ok",
+                    "payload": payload,
+                    "fetch_seconds": round(perf_counter() - started, 6),
+                }
+            except Exception as exc:
+                return {
+                    "status": "upstream_failed",
+                    "error": exc.__class__.__name__,
+                    "fetch_seconds": round(perf_counter() - started, 6),
+                }
+
+    async def fetch_fixture(fixture: Any) -> tuple[int, dict[str, Any]]:
+        fixture_id = int(fixture.sportmonks_id)
+        enriched, odds = await asyncio.gather(
+            request("enriched", fixture_id),
+            request("odds", fixture_id),
+        )
+        return fixture_id, {"enriched": enriched, "odds": odds}
+
+    pairs = await asyncio.gather(*(fetch_fixture(fixture) for fixture in fixtures))
+    payloads = dict(pairs)
+    return payloads, {
+        "concurrency": concurrency,
+        "fixture_count": len(fixtures),
+        "request_count": len(fixtures) * 2,
+        "prefetch_seconds": round(perf_counter() - cycle_started, 6),
+    }
+
+
 async def run_daily_prediction_runner(
     *,
     max_lateness_minutes: int = DEFAULT_MAX_LATENESS_MINUTES,
@@ -164,13 +239,13 @@ async def run_daily_prediction_runner(
     if max_fixtures < 1 or max_fixtures > MAX_FIXTURES_PER_RUN:
         raise ValueError(f"max_fixtures must be between 1 and {MAX_FIXTURES_PER_RUN}")
 
+    cycle_started = perf_counter()
     now = datetime.now(timezone.utc)
     fixtures = legacy._due_target_fixtures(
         now=now,
         max_lateness_minutes=max_lateness_minutes,
         max_fixtures=max_fixtures,
     )
-    client = SportmonksClient()
     inference_runtime = InferenceRuntimeV2(
         history_days=DEFAULT_HISTORY_DAYS,
         lookback_matches=DEFAULT_LOOKBACK_MATCHES,
@@ -181,6 +256,31 @@ async def run_daily_prediction_runner(
     )
     counts: Counter[str] = Counter()
     items: list[dict[str, Any]] = []
+
+    recorded = _recorded_fixture_windows(fixtures)
+    pending_fixtures = [
+        fixture
+        for fixture in fixtures
+        if (int(fixture.id), legacy._snapshot_window(fixture)) not in recorded
+    ]
+
+    upstream: dict[int, dict[str, Any]] = {}
+    upstream_audit: dict[str, Any] = {
+        "concurrency": DEFAULT_J1_UPSTREAM_CONCURRENCY,
+        "fixture_count": 0,
+        "request_count": 0,
+        "prefetch_seconds": 0.0,
+    }
+    transport_audit: dict[str, Any] = {}
+
+    if pending_fixtures:
+        async with SportmonksClient() as client:
+            upstream, upstream_audit = await _fetch_j1_upstream(
+                client,
+                pending_fixtures,
+                concurrency=DEFAULT_J1_UPSTREAM_CONCURRENCY,
+            )
+            transport_audit = client.transport_audit()
 
     for fixture in fixtures:
         snapshot_window = legacy._snapshot_window(fixture)
@@ -198,50 +298,75 @@ async def run_daily_prediction_runner(
             "ledger": None,
         }
 
-        if legacy._decision_already_recorded(fixture, snapshot_window):
+        if (int(fixture.id), snapshot_window) in recorded:
             counts["already_recorded"] += 1
             item["status"] = "already_recorded"
             items.append(item)
             continue
 
-        try:
-            enriched = await client.enriched_fixture(int(fixture.sportmonks_id))
-            item["lineup_context"] = legacy._persist_lineup_context(
-                fixture=fixture,
-                snapshot_window=snapshot_window,
-                payload=enriched,
-            )
-            if item["lineup_context"].get("lineups_available"):
-                counts["lineups_available"] += 1
-            else:
-                counts["lineups_not_available"] += 1
-        except Exception as exc:
+        fetched = upstream.get(int(fixture.sportmonks_id), {})
+        enriched_fetch = fetched.get("enriched") or {}
+        if enriched_fetch.get("status") == "ok":
+            try:
+                item["lineup_context"] = legacy._persist_lineup_context(
+                    fixture=fixture,
+                    snapshot_window=snapshot_window,
+                    payload=enriched_fetch.get("payload") or {},
+                )
+                item["lineup_context"]["fetch_seconds"] = enriched_fetch.get("fetch_seconds")
+                if item["lineup_context"].get("lineups_available"):
+                    counts["lineups_available"] += 1
+                else:
+                    counts["lineups_not_available"] += 1
+            except Exception as exc:
+                counts["lineup_fetch_failed"] += 1
+                item["lineup_context"] = {
+                    "status": "persistence_failed",
+                    "error": exc.__class__.__name__,
+                    "fetch_seconds": enriched_fetch.get("fetch_seconds"),
+                    "used_by_current_model": False,
+                }
+        else:
             counts["lineup_fetch_failed"] += 1
             item["lineup_context"] = {
                 "status": "upstream_failed",
-                "error": exc.__class__.__name__,
+                "error": enriched_fetch.get("error") or "MISSING_PREFETCH_RESULT",
+                "fetch_seconds": enriched_fetch.get("fetch_seconds"),
                 "used_by_current_model": False,
             }
 
-        try:
-            odds_payload = await client.prematch_odds_by_fixture(int(fixture.sportmonks_id))
-            odds_result = legacy.ingest_prematch_odds_payload(
-                sportmonks_fixture_id=int(fixture.sportmonks_id),
-                payload=odds_payload,
-                snapshot_window=snapshot_window,
-            )
-            item["odds"] = {
-                "status": odds_result.get("status"),
-                "received": odds_result.get("received", 0),
-                "created": odds_result.get("created", 0),
-                "filtered_out": odds_result.get("filtered_out", 0),
-                "skipped": odds_result.get("skipped", 0),
-                "error_count": len(odds_result.get("errors") or []),
-            }
-            counts["odds_rows_created"] += int(odds_result.get("created") or 0)
-        except Exception as exc:
+        odds_fetch = fetched.get("odds") or {}
+        if odds_fetch.get("status") == "ok":
+            try:
+                odds_result = legacy.ingest_prematch_odds_payload(
+                    sportmonks_fixture_id=int(fixture.sportmonks_id),
+                    payload=odds_fetch.get("payload") or {},
+                    snapshot_window=snapshot_window,
+                )
+                item["odds"] = {
+                    "status": odds_result.get("status"),
+                    "received": odds_result.get("received", 0),
+                    "created": odds_result.get("created", 0),
+                    "filtered_out": odds_result.get("filtered_out", 0),
+                    "skipped": odds_result.get("skipped", 0),
+                    "error_count": len(odds_result.get("errors") or []),
+                    "fetch_seconds": odds_fetch.get("fetch_seconds"),
+                }
+                counts["odds_rows_created"] += int(odds_result.get("created") or 0)
+            except Exception as exc:
+                counts["odds_failed"] += 1
+                item["odds"] = {
+                    "status": "ingestion_failed",
+                    "error": exc.__class__.__name__,
+                    "fetch_seconds": odds_fetch.get("fetch_seconds"),
+                }
+        else:
             counts["odds_failed"] += 1
-            item["odds"] = {"status": "upstream_failed", "error": exc.__class__.__name__}
+            item["odds"] = {
+                "status": "upstream_failed",
+                "error": odds_fetch.get("error") or "MISSING_PREFETCH_RESULT",
+                "fetch_seconds": odds_fetch.get("fetch_seconds"),
+            }
 
         try:
             inference = inference_runtime.generate_and_persist_prediction(
@@ -343,6 +468,15 @@ async def run_daily_prediction_runner(
         "timezone": BUSINESS_TIMEZONE,
         "run_health": health,
         "inference_runtime": runtime_audit,
+        "performance": {
+            "cycle_seconds": round(perf_counter() - cycle_started, 6),
+            "recorded_decision_lookup_queries": 1 if fixtures else 0,
+            "recorded_decision_lookup_batched": True,
+            "pending_fixture_count": len(pending_fixtures),
+            "upstream_prefetch": upstream_audit,
+            "sportmonks_transport": transport_audit,
+            "upstream_network_parallel_persistence_and_inference_sequential": True,
+        },
         "window": {
             "name": "J1",
             "target_lead_minutes": J1_TARGET_LEAD_MINUTES,
@@ -359,7 +493,9 @@ async def run_daily_prediction_runner(
             "prediction_must_be_generated_at_or_after_j1_due": True,
             "historical_dataset_reused_within_same_j1_cycle": True,
             "per_fixture_temporal_cutoff_preserved": True,
-            "per_fixture_model_fit_preserved": True,
+            "model_fit_reused_only_for_identical_training_sha256": True,
+            "distinct_training_sha256_never_share_fit": True,
+            "target_features_remain_per_fixture": True,
             "all_selected_1x2_quotes_must_fit_j1_window": True,
             "valid_bet_candidate_is_prioritized_over_market_that_fails_a_gate": True,
             "decision_thresholds_unchanged": True,
