@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.j1_scheduler_v2 import run_primary_operations_cycle
+from app.j1_scheduler import run_primary_operations_cycle as run_legacy_primary_operations_cycle
+from app.j1_scheduler_v2 import run_primary_operations_cycle as run_v2_primary_operations_cycle
 from app.models import Fixture
 from app.odds_window_clv import (
     _clv_payload,
@@ -99,16 +100,27 @@ class OddsWindowCLVTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(payload["model_edge_vs_closing"], 0.04, places=9)
         self.assertTrue(payload["positive_clv"])
 
-    async def test_closing_failure_does_not_break_valid_j1_cycle(self) -> None:
+    async def test_v2_closing_failure_does_not_break_valid_j1_cycle(self) -> None:
         j1 = {"status": "ok", "run_health": {"status": "OK"}, "counts": {}}
         with patch("app.j1_scheduler_v2.run_j1_cycle", new=AsyncMock(return_value=j1)), patch(
             "app.j1_scheduler_v2.run_odds_window_clv_cycle",
             new=AsyncMock(side_effect=RuntimeError("temporary")),
         ):
-            result = await run_primary_operations_cycle()
+            result = await run_v2_primary_operations_cycle()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["odds_window_clv"]["status"], "failed")
         self.assertEqual(result["run_health"]["status"], "OK")
+
+    async def test_legacy_render_command_runs_closing_without_risking_j1(self) -> None:
+        j1 = {"status": "ok", "run_health": {"status": "IDLE"}, "counts": {}}
+        with patch("app.j1_scheduler.run_j1_cycle", new=AsyncMock(return_value=j1)), patch(
+            "app.odds_window_clv.run_odds_window_clv_cycle",
+            new=AsyncMock(return_value={"status": "ok", "version": "odds_window_clv_v1"}),
+        ):
+            result = await run_legacy_primary_operations_cycle()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["odds_window_clv"]["status"], "ok")
+        self.assertEqual(result["run_health"]["status"], "IDLE")
 
 
 if __name__ == "__main__":
