@@ -9,6 +9,7 @@ from fastapi import HTTPException, Query
 from app.daily_operations import router as daily_operations_router
 from app.daily_prediction_runner_v2 import router as daily_prediction_runner_router
 from app.dashboard_operations_v2 import router as dashboard_operations_v2_router
+from app.dashboard_operations_v2_bulk import install_dashboard_operations_v2_bulk_reads
 from app.dashboard_operations_v2_health import install_dashboard_operations_v2_health
 from app.decision_engine_v2 import router as decision_engine_v2_router
 from app.historical_controller_v2 import run_historical_controller_v2
@@ -20,7 +21,7 @@ from app.prediction_window_policy import install_prediction_window_policy
 from app.probability_calibration import build_probability_calibration_v1
 from app.upstream_exceptions import register_upstream_exceptions
 
-app.version = "0.40.0"
+app.version = "0.41.0"
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
@@ -144,6 +145,10 @@ install_prediction_window_policy()
 # GitHub Actions OIDC token bound to this repository/main/workflow; all other
 # mutable endpoints require X-Enigma-Internal-Key when manual access is needed.
 install_internal_endpoint_auth(app)
+
+# Replace Operations V2 per-fixture reads with a fixed five-query data plan:
+# fixtures + odds aggregation + latest context + latest prediction + latest decision.
+install_dashboard_operations_v2_bulk_reads()
 
 # Patch the HTTP J1 endpoint through the same advisory lock used by the Render
 # cron, then enrich Operations V2 with the persisted scheduler heartbeat.
