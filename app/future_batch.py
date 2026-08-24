@@ -19,6 +19,8 @@ from app.decision_engine import (
     evaluate_fixture_decision,
 )
 from app.forward_test_ledger import (
+    DecisionRecord,
+    ensure_forward_test_schema,
     persist_evaluated_decision,
     router as forward_test_router,
 )
@@ -38,12 +40,13 @@ from app.prematch_inference import (
 )
 from app.sportmonks import SportmonksClient
 
-FUTURE_BATCH_VERSION = "future_batch_runner_v1"
+FUTURE_BATCH_VERSION = "future_batch_runner_v1_1"
 DEFAULT_DAYS_AHEAD = 3
 DEFAULT_MAX_FIXTURES = 3
 MAX_DAYS_AHEAD = 7
 MAX_FIXTURES = 5
 DEFAULT_MIN_LEAD_MINUTES = 60
+DEFAULT_SKIP_EXISTING_FIXTURES = True
 
 router = APIRouter()
 router.include_router(forward_test_router)
@@ -156,6 +159,7 @@ async def run_future_batch(
     max_overround: float = DEFAULT_MAX_OVERROUND,
     max_quote_span_seconds: int = DEFAULT_MAX_QUOTE_SPAN_SECONDS,
     require_team_favorite_top_class: bool = True,
+    skip_existing_fixtures: bool = DEFAULT_SKIP_EXISTING_FIXTURES,
 ) -> dict[str, Any]:
     if days_ahead < 0 or days_ahead > MAX_DAYS_AHEAD:
         raise ValueError(f"days_ahead must be between 0 and {MAX_DAYS_AHEAD}")
@@ -205,6 +209,7 @@ async def run_future_batch(
             )
         day += timedelta(days=1)
 
+    ensure_forward_test_schema()
     with SessionLocal() as session:
         candidates = session.scalars(
             select(Fixture)
@@ -212,7 +217,19 @@ async def run_future_batch(
             .order_by(Fixture.starts_at.asc(), Fixture.id.asc())
         ).all()
 
+        existing_fixture_ids: set[int] = set()
+        if skip_existing_fixtures:
+            existing_fixture_ids = {
+                int(value)
+                for value in session.scalars(
+                    select(DecisionRecord.sportmonks_fixture_id).distinct()
+                ).all()
+            }
+
         target_candidates: list[Fixture] = []
+        eligible_candidates: list[Fixture] = []
+        skipped_existing = 0
+
         for fixture in candidates:
             canonical = canonical_league(fixture.league_name)
             key = canonical.get("key")
@@ -220,9 +237,15 @@ async def run_future_batch(
                 continue
             if requested_keys and str(key) not in requested_keys:
                 continue
-            target_candidates.append(fixture)
 
-        selected = target_candidates[:max_fixtures]
+            target_candidates.append(fixture)
+            sportmonks_id = int(fixture.sportmonks_id)
+            if skip_existing_fixtures and sportmonks_id in existing_fixture_ids:
+                skipped_existing += 1
+                continue
+            eligible_candidates.append(fixture)
+
+        selected = eligible_candidates[:max_fixtures]
         selected_payloads = [_fixture_payload(fixture) for fixture in selected]
 
     items: list[dict[str, Any]] = []
@@ -372,6 +395,7 @@ async def run_future_batch(
             "evaluated_at": now.isoformat(),
             "prediction_window": prediction_window,
             "snapshot_window": effective_snapshot_window,
+            "skip_existing_fixtures": skip_existing_fixtures,
             "selected_fixture_ids": [
                 item["fixture"]["sportmonks_fixture_id"] for item in items
             ],
@@ -396,6 +420,7 @@ async def run_future_batch(
             "end_at": end_dt.isoformat(),
             "league_filters": leagues or [],
             "max_fixtures": max_fixtures,
+            "skip_existing_fixtures": skip_existing_fixtures,
         },
         "windows": {
             "prediction_window": prediction_window,
@@ -404,6 +429,8 @@ async def run_future_batch(
         "fixture_ingestion": fixture_ingestion,
         "summary": {
             "future_target_candidates": len(target_candidates),
+            "eligible_new_candidates": len(eligible_candidates),
+            "skipped_existing_fixtures": skipped_existing,
             "selected_fixtures": len(selected_payloads),
             "inference_ready": counts["inference_ready"],
             "inference_not_ready": counts["inference_not_ready"],
@@ -435,6 +462,9 @@ async def run_future_batch(
             "decision_thresholds_are_initial_not_test_optimized": True,
             "decision_persistence_enabled": True,
             "forward_test_records_immutable": True,
+            "skip_existing_fixtures_default": DEFAULT_SKIP_EXISTING_FIXTURES,
+            "duplicate_fixture_records_prevented_by_default": skip_existing_fixtures,
+            "snapshot_specific_ledger_keys_preserved": True,
             "max_batch_size": MAX_FIXTURES,
         },
     }
@@ -460,6 +490,7 @@ async def future_batch_run_endpoint(
     max_overround: float = Query(default=DEFAULT_MAX_OVERROUND, ge=0.0, le=0.30),
     max_quote_span_seconds: int = Query(default=DEFAULT_MAX_QUOTE_SPAN_SECONDS, ge=0, le=3600),
     require_team_favorite_top_class: bool = True,
+    skip_existing_fixtures: bool = DEFAULT_SKIP_EXISTING_FIXTURES,
 ) -> dict[str, Any]:
     try:
         return await run_future_batch(
@@ -481,6 +512,7 @@ async def future_batch_run_endpoint(
             max_overround=max_overround,
             max_quote_span_seconds=max_quote_span_seconds,
             require_team_favorite_top_class=require_team_favorite_top_class,
+            skip_existing_fixtures=skip_existing_fixtures,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
