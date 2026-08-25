@@ -2,18 +2,21 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 
 import app.enigma_rating_v2_evaluation as evaluation
 from app.database import SessionLocal
 from app.league_registry import canonical_league
-from app.models import Fixture
+from app.models import Fixture, FixtureDataSnapshot
 
 EVALUATION_XG_CHRONOLOGY_VERSION = "evaluation_v1_xg_chronology_v1"
+EVALUATION_LOADER_VERSION = "evaluation_v1_streaming_loader_v1"
 RATE_HISTORY_MAX_MATCHES = 10
 XG_HISTORY_MAX_OBSERVATIONS = 10
+FIXTURE_PAGE_SIZE = 96
 
 
 def _has_complete_xg(observation: dict[str, Any]) -> bool:
@@ -27,12 +30,7 @@ def _compose_model_history(
     rate_history: deque[dict[str, Any]],
     xg_history: deque[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Combine recent-result rates with independently accumulated xG evidence.
-
-    Form/goals use the last 10 completed results. xG/xGA uses the last 10
-    *complete xG observations*. Missing-xG matches therefore do not evict valid
-    xG evidence. Both streams remain chronological and strictly pre-target.
-    """
+    """Combine recent-result rates with independently accumulated xG evidence."""
 
     rate_summary = evaluation._history_summary(rate_history)
     xg_summary = evaluation._history_summary(xg_history)
@@ -58,6 +56,89 @@ def _append_observation(
     return True
 
 
+def _fixture_page(
+    session,
+    *,
+    warmup_start: datetime,
+    latest_target: datetime,
+    cursor_starts_at: datetime | None,
+    cursor_fixture_id: int | None,
+    limit: int = FIXTURE_PAGE_SIZE,
+) -> list[Any]:
+    stmt = select(
+        Fixture.id,
+        Fixture.league_name,
+        Fixture.home_team,
+        Fixture.away_team,
+        Fixture.starts_at,
+    ).where(
+        Fixture.starts_at >= warmup_start,
+        Fixture.starts_at <= latest_target,
+    )
+    if cursor_starts_at is not None and cursor_fixture_id is not None:
+        stmt = stmt.where(
+            or_(
+                Fixture.starts_at > cursor_starts_at,
+                and_(
+                    Fixture.starts_at == cursor_starts_at,
+                    Fixture.id > cursor_fixture_id,
+                ),
+            )
+        )
+    return list(
+        session.execute(
+            stmt.order_by(Fixture.starts_at.asc(), Fixture.id.asc()).limit(limit)
+        ).all()
+    )
+
+
+def _latest_snapshot_payloads(
+    session,
+    fixture_ids: list[int],
+) -> dict[int, Any]:
+    """Load only latest statistics/xG JSON for one bounded fixture page."""
+
+    if not fixture_ids:
+        return {}
+
+    ranked = (
+        select(
+            FixtureDataSnapshot.fixture_id.label("fixture_id"),
+            FixtureDataSnapshot.id.label("snapshot_id"),
+            FixtureDataSnapshot.statistics.label("statistics"),
+            FixtureDataSnapshot.xg.label("xg"),
+            func.row_number()
+            .over(
+                partition_by=FixtureDataSnapshot.fixture_id,
+                order_by=[
+                    FixtureDataSnapshot.fetched_at.desc(),
+                    FixtureDataSnapshot.id.desc(),
+                ],
+            )
+            .label("snapshot_rank"),
+        )
+        .where(FixtureDataSnapshot.fixture_id.in_(fixture_ids))
+        .subquery()
+    )
+    rows = session.execute(
+        select(
+            ranked.c.fixture_id,
+            ranked.c.snapshot_id,
+            ranked.c.statistics,
+            ranked.c.xg,
+        ).where(ranked.c.snapshot_rank == 1)
+    ).all()
+
+    return {
+        int(row.fixture_id): SimpleNamespace(
+            id=int(row.snapshot_id),
+            statistics=row.statistics,
+            xg=row.xg,
+        )
+        for row in rows
+    }
+
+
 def _evaluate_challengers_chronologically(
     targets: list[dict[str, Any]],
     *,
@@ -76,6 +157,7 @@ def _evaluate_challengers_chronologically(
                 "fixtures_scanned": 0,
                 "snapshots_loaded": 0,
                 "xg_chronology_version": EVALUATION_XG_CHRONOLOGY_VERSION,
+                "loader_version": EVALUATION_LOADER_VERSION,
             },
         }
 
@@ -94,26 +176,6 @@ def _evaluate_challengers_chronologically(
         if canonical_league(str(row.get("league") or "")).get("key")
     }
 
-    with SessionLocal() as session:
-        fixtures = session.scalars(
-            select(Fixture)
-            .where(
-                Fixture.starts_at >= warmup_start,
-                Fixture.starts_at <= latest_target,
-            )
-            .order_by(Fixture.starts_at.asc(), Fixture.id.asc())
-        ).all()
-        fixtures = [
-            fixture
-            for fixture in fixtures
-            if canonical_league(fixture.league_name).get("key")
-            in requested_league_keys
-        ]
-        snapshot_map = evaluation._latest_snapshot_map(
-            session,
-            [int(fixture.id) for fixture in fixtures],
-        )
-
     rate_histories: dict[tuple[str, str], deque[dict[str, Any]]] = defaultdict(
         lambda: deque(maxlen=RATE_HISTORY_MAX_MATCHES)
     )
@@ -124,47 +186,17 @@ def _evaluate_challengers_chronologically(
     elo_matches: dict[tuple[str, str], int] = defaultdict(int)
     output: dict[int, dict[str, Any]] = {}
 
-    payload_cache = {
-        int(fixture.id): evaluation._fixture_payload(
-            fixture,
-            snapshot_map.get(int(fixture.id)),
-        )
-        for fixture in fixtures
-    }
-
-    snapshot_xg_rows = 0
-    payloads_ready = 0
-    payloads_with_full_parsed_xg = 0
-    for fixture in fixtures:
-        snapshot = snapshot_map.get(int(fixture.id))
-        if snapshot is not None and evaluation._as_list(snapshot.xg):
-            snapshot_xg_rows += 1
-        payload = payload_cache.get(int(fixture.id))
-        if payload is None:
-            continue
-        payloads_ready += 1
-        home_observation = payload["home_observation"]
-        away_observation = payload["away_observation"]
-        if _has_complete_xg(home_observation) and _has_complete_xg(away_observation):
-            payloads_with_full_parsed_xg += 1
-
     audit_counts: Counter[str] = Counter()
     readiness_by_partition: dict[str, Counter[str]] = defaultdict(Counter)
+    pending_group: list[dict[str, Any]] = []
+    pending_group_starts_at: datetime | None = None
 
-    index = 0
-    while index < len(fixtures):
-        starts_at = evaluation._aware_utc(fixtures[index].starts_at)
-        group: list[Fixture] = []
-        while (
-            index < len(fixtures)
-            and evaluation._aware_utc(fixtures[index].starts_at) == starts_at
-        ):
-            group.append(fixtures[index])
-            index += 1
+    def process_group(group: list[dict[str, Any]]) -> None:
+        if not group:
+            return
 
-        # Score every target at this timestamp before appending any result from
-        # the same timestamp. This preserves the existing leakage guard.
-        for fixture in group:
+        for event in group:
+            fixture = event["fixture"]
             target = target_by_fixture_id.get(int(fixture.id))
             if target is None:
                 continue
@@ -278,10 +310,9 @@ def _evaluate_challengers_chronologically(
                 },
             }
 
-        # Only after all predictions at this timestamp have been scored do we
-        # append the observed results to the histories used by future targets.
-        for fixture in group:
-            payload = payload_cache.get(int(fixture.id))
+        for event in group:
+            fixture = event["fixture"]
+            payload = event["payload"]
             if payload is None:
                 audit_counts["fixtures_without_usable_payload"] += 1
                 continue
@@ -320,13 +351,100 @@ def _evaluate_challengers_chronologically(
             elo_matches[home_key] += 1
             elo_matches[away_key] += 1
 
+    cursor_starts_at: datetime | None = None
+    cursor_fixture_id: int | None = None
+
+    with SessionLocal() as session:
+        while True:
+            page = _fixture_page(
+                session,
+                warmup_start=warmup_start,
+                latest_target=latest_target,
+                cursor_starts_at=cursor_starts_at,
+                cursor_fixture_id=cursor_fixture_id,
+                limit=FIXTURE_PAGE_SIZE,
+            )
+            if not page:
+                break
+
+            audit_counts["fixture_pages"] += 1
+            audit_counts["fixture_metadata_rows_scanned"] += len(page)
+            audit_counts["max_fixture_page_rows"] = max(
+                audit_counts["max_fixture_page_rows"],
+                len(page),
+            )
+
+            eligible_page = [
+                row
+                for row in page
+                if canonical_league(row.league_name).get("key")
+                in requested_league_keys
+            ]
+            audit_counts["eligible_fixtures_scanned"] += len(eligible_page)
+
+            fixture_ids = [int(row.id) for row in eligible_page]
+            snapshot_map = _latest_snapshot_payloads(session, fixture_ids)
+            audit_counts["snapshots_loaded"] += len(snapshot_map)
+            audit_counts["max_latest_snapshots_in_page"] = max(
+                audit_counts["max_latest_snapshots_in_page"],
+                len(snapshot_map),
+            )
+
+            for row in eligible_page:
+                fixture = SimpleNamespace(
+                    id=int(row.id),
+                    league_name=row.league_name,
+                    home_team=row.home_team,
+                    away_team=row.away_team,
+                    starts_at=evaluation._aware_utc(row.starts_at),
+                )
+                snapshot = snapshot_map.get(int(fixture.id))
+                if snapshot is not None and evaluation._as_list(snapshot.xg):
+                    audit_counts["snapshots_with_nonempty_xg"] += 1
+
+                payload = evaluation._fixture_payload(fixture, snapshot)
+                if payload is not None:
+                    audit_counts["usable_historical_payloads"] += 1
+                    if _has_complete_xg(
+                        payload["home_observation"]
+                    ) and _has_complete_xg(payload["away_observation"]):
+                        audit_counts["payloads_with_full_parsed_xg"] += 1
+
+                starts_at = evaluation._aware_utc(fixture.starts_at)
+                if (
+                    pending_group
+                    and pending_group_starts_at is not None
+                    and starts_at != pending_group_starts_at
+                ):
+                    process_group(pending_group)
+                    pending_group.clear()
+
+                if not pending_group:
+                    pending_group_starts_at = starts_at
+                pending_group.append(
+                    {
+                        "fixture": fixture,
+                        "payload": payload,
+                    }
+                )
+
+            last = page[-1]
+            cursor_starts_at = evaluation._aware_utc(last.starts_at)
+            cursor_fixture_id = int(last.id)
+
+            snapshot_map.clear()
+            page.clear()
+
+        process_group(pending_group)
+        pending_group.clear()
+
     rows = [
         output[int(row["fixture_id"])]
         for row in targets
         if int(row["fixture_id"]) in output
     ]
 
-    readiness = {}
+    readiness: dict[str, Any] = {}
     for partition, counts in sorted(readiness_by_partition.items()):
         total = int(counts["targets"])
         full_ready = int(counts["full_xg_history_ready"])
@@ -346,11 +464,26 @@ def _evaluate_challengers_chronologically(
     return {
         "rows": rows,
         "audit": {
-            "fixtures_scanned": len(fixtures),
-            "snapshots_loaded": len(snapshot_map),
-            "snapshots_with_nonempty_xg": snapshot_xg_rows,
-            "usable_historical_payloads": payloads_ready,
-            "payloads_with_full_parsed_xg": payloads_with_full_parsed_xg,
+            "fixtures_scanned": int(audit_counts["eligible_fixtures_scanned"]),
+            "fixture_metadata_rows_scanned": int(
+                audit_counts["fixture_metadata_rows_scanned"]
+            ),
+            "fixture_pages": int(audit_counts["fixture_pages"]),
+            "fixture_page_size": FIXTURE_PAGE_SIZE,
+            "max_fixture_page_rows": int(audit_counts["max_fixture_page_rows"]),
+            "snapshots_loaded": int(audit_counts["snapshots_loaded"]),
+            "max_latest_snapshots_in_page": int(
+                audit_counts["max_latest_snapshots_in_page"]
+            ),
+            "snapshots_with_nonempty_xg": int(
+                audit_counts["snapshots_with_nonempty_xg"]
+            ),
+            "usable_historical_payloads": int(
+                audit_counts["usable_historical_payloads"]
+            ),
+            "payloads_with_full_parsed_xg": int(
+                audit_counts["payloads_with_full_parsed_xg"]
+            ),
             "team_rate_observations_appended": int(
                 audit_counts["team_rate_observations_appended"]
             ),
@@ -375,16 +508,30 @@ def _evaluate_challengers_chronologically(
             "elo_warmup_days": int(elo_warmup_days),
             "same_timestamp_targets_are_scored_before_any_same_timestamp_result_update": True,
             "snapshot_selection_policy": "latest fetched_at DESC, id DESC per fixture",
-            "rate_history_policy": "last 10 usable same-league completed results strictly before target",
-            "xg_history_policy": "last 10 complete same-league xG/xGA observations strictly before target",
+            "rate_history_policy": (
+                "last 10 usable same-league completed results strictly before target"
+            ),
+            "xg_history_policy": (
+                "last 10 complete same-league xG/xGA observations strictly before target"
+            ),
             "xg_missing_matches_do_not_evict_valid_xg_evidence": True,
             "xg_chronology_version": EVALUATION_XG_CHRONOLOGY_VERSION,
+            "loader_version": EVALUATION_LOADER_VERSION,
+            "loader_policy": {
+                "fixture_scan": "keyset paginated chronological SQL",
+                "league_canonicalization_before_snapshot_json_load": True,
+                "latest_snapshot_only_per_fixture_page": True,
+                "lineups_not_loaded": True,
+                "older_snapshots_not_materialized": True,
+                "raw_snapshot_objects_retained_across_pages": False,
+                "same_timestamp_group_may_span_page_boundary": True,
+            },
         },
     }
 
 
 def install_evaluation_v1_xg_chronology_fix() -> None:
-    """Install the corrected chronology without changing the public V1 route."""
+    """Install corrected xG chronology and bounded 1460-day loader."""
 
     evaluation._evaluate_challengers_chronologically = (
         _evaluate_challengers_chronologically

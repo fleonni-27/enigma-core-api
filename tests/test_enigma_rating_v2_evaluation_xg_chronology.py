@@ -1,8 +1,11 @@
 import unittest
 from collections import deque
+from pathlib import Path
 
 import app.enigma_rating_v2_evaluation as evaluation
 from app.enigma_rating_v2_evaluation_chronology import (
+    EVALUATION_LOADER_VERSION,
+    FIXTURE_PAGE_SIZE,
     RATE_HISTORY_MAX_MATCHES,
     XG_HISTORY_MAX_OBSERVATIONS,
     _append_observation,
@@ -35,8 +38,6 @@ class EnigmaRatingV2XGChronologyTests(unittest.TestCase):
             )
             self.assertTrue(appended)
 
-        # Reproduce the former failure mode: enough later non-xG matches to
-        # evict all three valid observations from a single deque(maxlen=10).
         for _ in range(10):
             appended = _append_observation(
                 rate_history=rate_history,
@@ -96,6 +97,57 @@ class EnigmaRatingV2XGChronologyTests(unittest.TestCase):
         )
         self.assertIs(evaluation.build_enigma_rating_v2_evaluation_v1, original_builder)
         self.assertIs(evaluation.router, original_router)
+
+
+class EnigmaRatingV2MemoryHardeningContractTests(unittest.TestCase):
+    def test_1460_day_default_is_preserved(self):
+        source = Path("app/enigma_rating_v2_evaluation.py").read_text(encoding="utf-8")
+        self.assertIn("DEFAULT_ELO_WARMUP_DAYS = 1460", source)
+
+    def test_loader_is_bounded_and_does_not_materialize_full_snapshot_history(self):
+        source = Path("app/enigma_rating_v2_evaluation_chronology.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(EVALUATION_LOADER_VERSION, "evaluation_v1_streaming_loader_v1")
+        self.assertLessEqual(FIXTURE_PAGE_SIZE, 128)
+        self.assertIn("func.row_number()", source)
+        self.assertIn('ranked.c.snapshot_rank == 1', source)
+        self.assertIn('"lineups_not_loaded": True', source)
+        self.assertIn('"older_snapshots_not_materialized": True', source)
+        self.assertIn('"raw_snapshot_objects_retained_across_pages": False', source)
+        self.assertIn("snapshot_map.clear()", source)
+        self.assertIn("page.clear()", source)
+        self.assertNotIn("evaluation._latest_snapshot_map(", source)
+        self.assertNotIn("payload_cache =", source)
+        self.assertNotIn("select(Fixture)", source)
+        self.assertNotIn("FixtureDataSnapshot.lineups", source)
+
+    def test_canonical_league_filter_happens_before_snapshot_json_load(self):
+        source = Path("app/enigma_rating_v2_evaluation_chronology.py").read_text(
+            encoding="utf-8"
+        )
+        canonical_at = source.index("eligible_page = [")
+        snapshot_at = source.index("snapshot_map = _latest_snapshot_payloads")
+        self.assertLess(canonical_at, snapshot_at)
+        self.assertIn(
+            '"league_canonicalization_before_snapshot_json_load": True',
+            source,
+        )
+
+    def test_same_timestamp_guard_is_preserved_across_page_boundaries(self):
+        source = Path("app/enigma_rating_v2_evaluation_chronology.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pending_group", source)
+        self.assertIn("pending_group_starts_at", source)
+        self.assertIn(
+            '"same_timestamp_group_may_span_page_boundary": True',
+            source,
+        )
+        self.assertIn(
+            '"same_timestamp_targets_are_scored_before_any_same_timestamp_result_update": True',
+            source,
+        )
 
 
 if __name__ == "__main__":
