@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from threading import Lock
 from time import perf_counter
@@ -42,6 +43,10 @@ J1_SCHEDULER_VERSION = "j1_scheduler_v2"
 J1_OPERATION_NAME = "DAILY_PREDICTION_J1"
 J1_ADVISORY_LOCK_KEY = 450026
 J1_HEARTBEAT_STALE_MINUTES = 20
+J1_EXECUTION_MODE_ENV = "J1_EXECUTION_MODE"
+J1_EXECUTION_MODE_BATCH = "batch"
+J1_EXECUTION_MODE_PRODUCER = "producer"
+VALID_J1_EXECUTION_MODES = {J1_EXECUTION_MODE_BATCH, J1_EXECUTION_MODE_PRODUCER}
 
 _schema_lock = Lock()
 _schema_ready = False
@@ -129,6 +134,15 @@ def latest_j1_run() -> OperationRunRecord | None:
             return None
         session.expunge(row)
         return row
+
+
+def configured_j1_execution_mode() -> str:
+    mode = str(os.getenv(J1_EXECUTION_MODE_ENV, J1_EXECUTION_MODE_BATCH)).strip().lower()
+    if mode not in VALID_J1_EXECUTION_MODES:
+        raise ValueError(
+            f"{J1_EXECUTION_MODE_ENV} must be one of {sorted(VALID_J1_EXECUTION_MODES)}"
+        )
+    return mode
 
 
 def _scheduler_status_from_result(result: dict[str, Any]) -> tuple[str, str | None]:
@@ -310,8 +324,39 @@ async def run_primary_operations_cycle() -> dict[str, Any]:
     return result
 
 
+async def run_render_cron_entrypoint() -> dict[str, Any]:
+    """Execute batch or producer mode without changing the Render start command.
+
+    This provides a safe cutover gate for the existing cron service. Production
+    remains in batch mode by default. After healthy claim workers are confirmed,
+    setting ``J1_EXECUTION_MODE=producer`` switches the same cron process to the
+    queue producer. The dedicated ``app.j1_work_producer`` remains the canonical
+    producer implementation and can become the start command later without
+    changing behavior.
+    """
+
+    mode = configured_j1_execution_mode()
+    if mode == J1_EXECUTION_MODE_PRODUCER:
+        from app.j1_work_producer import run_producer_cycle
+
+        result = await run_producer_cycle()
+    else:
+        result = await run_primary_operations_cycle()
+
+    execution = result.setdefault("execution", {})
+    execution.update(
+        {
+            "mode": mode,
+            "environment_variable": J1_EXECUTION_MODE_ENV,
+            "render_start_command_compatible": "python -m app.j1_scheduler",
+            "canonical_producer_module": "app.j1_work_producer",
+        }
+    )
+    return result
+
+
 def main() -> None:
-    result = asyncio.run(run_primary_operations_cycle())
+    result = asyncio.run(run_render_cron_entrypoint())
     print(json.dumps(result, ensure_ascii=False, default=str))
     health = str((result.get("run_health") or {}).get("status") or "UNKNOWN")
     if result.get("status") != "ok" or health == "FAILED":
