@@ -39,7 +39,7 @@ class XGHistoricalBackfillTests(unittest.TestCase):
         self.assertEqual(config["start_date"].isoformat(), "2026-01-01")
         self.assertEqual(config["end_date"].isoformat(), "2026-08-24")
         self.assertEqual(config["leagues"], ["Serie A"])
-        self.assertEqual(config["limit"], 1000)
+        self.assertEqual(config["limit"], 250)
         self.assertEqual(config["concurrency"], 3)
 
     def test_truthy_flag_is_explicit(self) -> None:
