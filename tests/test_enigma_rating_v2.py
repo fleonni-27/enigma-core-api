@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from app.enigma_rating_v2 import build_enigma_rating_v2
-from app.main_v017 import app
+from fastapi import FastAPI
+
+from app.enigma_rating_v2 import build_enigma_rating_v2, router as rating_v2_router
+from app.enigma_rating_v2_routes import router as rating_v2_fixture_router
+from app.main_v017 import app as production_app
 
 
 class EnigmaRatingV2Tests(unittest.TestCase):
@@ -78,12 +81,15 @@ class EnigmaRatingV2Tests(unittest.TestCase):
         self.assertEqual(detail["home_strength_retained"], 0.91)
         self.assertEqual(detail["away_strength_retained"], 0.79)
 
-    def test_v2_routes_are_registered_on_production_wrapper(self) -> None:
-        paths = {getattr(route, "path", None) for route in app.routes}
+    def test_v2_routes_have_stable_contract(self) -> None:
+        isolated = FastAPI()
+        isolated.include_router(rating_v2_router)
+        isolated.include_router(rating_v2_fixture_router)
+        paths = {getattr(route, "path", None) for route in isolated.routes}
         self.assertIn("/rating/enigma-v2", paths)
         self.assertIn("/rating/context-v2/{sportmonks_fixture_id}", paths)
         self.assertIn("/rating/enigma-v2/fixture/{sportmonks_fixture_id}", paths)
-        self.assertEqual(app.version, "0.50.0")
+        self.assertEqual(production_app.version, "0.50.0")
 
     def test_invalid_lineup_strength_fails_closed(self) -> None:
         payload = self._full_payload()
