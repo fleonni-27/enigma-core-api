@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from app import daily_prediction_runner_v2 as runner_module
-from app.j1_capacity import HARD_MAX_J1_FIXTURES
+from app.j1_capacity import HARD_MAX_J1_FIXTURES, configured_j1_max_fixtures
 from app.j1_pending_selector_v2 import install_j1_pending_selector_v2
 
 _installed = False
@@ -17,8 +17,8 @@ async def _scheduled_daily_prediction_runner_endpoint(
         ge=1,
         le=30,
     ),
-    max_fixtures: int = Query(
-        default=runner_module.DEFAULT_MAX_FIXTURES,
+    max_fixtures: int | None = Query(
+        default=None,
         ge=1,
         le=HARD_MAX_J1_FIXTURES,
     ),
@@ -26,10 +26,15 @@ async def _scheduled_daily_prediction_runner_endpoint(
     try:
         from app.j1_scheduler import run_j1_cycle
 
+        effective_max_fixtures = (
+            int(max_fixtures)
+            if max_fixtures is not None
+            else configured_j1_max_fixtures()
+        )
         return await run_j1_cycle(
             source="github_actions_http_fallback",
             max_lateness_minutes=max_lateness_minutes,
-            max_fixtures=max_fixtures,
+            max_fixtures=effective_max_fixtures,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
