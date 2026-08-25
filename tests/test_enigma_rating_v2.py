@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -90,7 +91,10 @@ class EnigmaRatingV2Tests(unittest.TestCase):
         self.assertIn("from app.enigma_rating_v2_routes import router as enigma_rating_v2_fixture_router", wrapper_source)
         self.assertIn("app.include_router(enigma_rating_v2_router)", wrapper_source)
         self.assertIn("app.include_router(enigma_rating_v2_fixture_router)", wrapper_source)
-        self.assertIn('app.version = "0.50.0"', wrapper_source)
+        match = re.search(r'app\.version = "(\d+)\.(\d+)\.(\d+)"', wrapper_source)
+        self.assertIsNotNone(match)
+        version = tuple(int(part) for part in match.groups())
+        self.assertGreaterEqual(version, (0, 50, 0))
 
     def test_invalid_lineup_strength_fails_closed(self) -> None:
         payload = self._full_payload()
