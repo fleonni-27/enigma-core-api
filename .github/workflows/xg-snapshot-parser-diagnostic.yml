@@ -1,0 +1,48 @@
+name: XG Snapshot Parser Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/xg-snapshot-parser-diagnostic
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      DATABASE_URL: sqlite+pysqlite:///:memory:
+      SPORTMONKS_API_TOKEN: ci-test-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Audit stored xG with production parser
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          from app.training_dataset import _as_list, _xg_value, _type_name
+
+          fixture_ids = [19453590, 19453588, 19453594]
+          for fixture_id in fixture_ids:
+              url = f"https://enigma-core-api.onrender.com/audit/fixture/{fixture_id}?include_raw=true&sample_size=25"
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  payload = json.load(response)
+
+              raw = payload.get("raw") or {}
+              xg = _as_list(raw.get("xg"))
+              statistics = _as_list(raw.get("statistics"))
+              type_names = [_type_name(row) for row in xg]
+              summary = {
+                  "fixture_id": fixture_id,
+                  "snapshot": payload.get("snapshot"),
+                  "counts": payload.get("counts"),
+                  "xg_type_names": type_names,
+                  "xg_home_parsed": _xg_value(xg, statistics, "home"),
+                  "xg_away_parsed": _xg_value(xg, statistics, "away"),
+                  "xg_rows": xg,
+              }
+              print("XG_DIAGNOSTIC=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          PY
