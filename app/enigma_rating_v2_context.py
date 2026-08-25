@@ -18,6 +18,9 @@ DEFAULT_FORM_LOOKBACK = 10
 DEFAULT_ELO_HISTORY_DAYS = 1460
 DEFAULT_ELO_INITIAL = 1500.0
 DEFAULT_ELO_K_FACTOR = 20.0
+MIN_RATE_HISTORY_MATCHES = 3
+MIN_XG_HISTORY_MATCHES = 3
+MIN_ELO_TEAM_MATCHES = 5
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -140,6 +143,47 @@ def _lineup_summary(lineups: Any) -> dict[str, Any]:
     }
 
 
+def _rating_inputs_from_evidence(
+    *,
+    home_history: dict[str, Any],
+    away_history: dict[str, Any],
+    ratings: dict[str, float],
+    elo_team_matches: dict[str, int],
+    home_team: str,
+    away_team: str,
+    elo_initial: float,
+    form_lookback: int,
+) -> dict[str, Any]:
+    home_rate_ready = int(home_history["history_matches"]) >= MIN_RATE_HISTORY_MATCHES
+    away_rate_ready = int(away_history["history_matches"]) >= MIN_RATE_HISTORY_MATCHES
+    home_xg_for_ready = int(home_history["xg_for_history_matches"]) >= MIN_XG_HISTORY_MATCHES
+    away_xg_for_ready = int(away_history["xg_for_history_matches"]) >= MIN_XG_HISTORY_MATCHES
+    home_xga_ready = int(home_history["xg_against_history_matches"]) >= MIN_XG_HISTORY_MATCHES
+    away_xga_ready = int(away_history["xg_against_history_matches"]) >= MIN_XG_HISTORY_MATCHES
+    form_10_ready = (
+        form_lookback == 10
+        and int(home_history["history_matches"]) == 10
+        and int(away_history["history_matches"]) == 10
+    )
+    home_elo_ready = int(elo_team_matches.get(home_team, 0)) >= MIN_ELO_TEAM_MATCHES
+    away_elo_ready = int(elo_team_matches.get(away_team, 0)) >= MIN_ELO_TEAM_MATCHES
+
+    return {
+        "home_goals_for_avg": home_history["goals_for_avg"] if home_rate_ready else None,
+        "away_goals_for_avg": away_history["goals_for_avg"] if away_rate_ready else None,
+        "home_goals_against_avg": home_history["goals_against_avg"] if home_rate_ready else None,
+        "away_goals_against_avg": away_history["goals_against_avg"] if away_rate_ready else None,
+        "home_xg_for_avg": home_history["xg_for_avg"] if home_xg_for_ready else None,
+        "away_xg_for_avg": away_history["xg_for_avg"] if away_xg_for_ready else None,
+        "home_xg_against_avg": home_history["xg_against_avg"] if home_xga_ready else None,
+        "away_xg_against_avg": away_history["xg_against_avg"] if away_xga_ready else None,
+        "home_points_per_match_10": home_history["points_per_match"] if form_10_ready else None,
+        "away_points_per_match_10": away_history["points_per_match"] if form_10_ready else None,
+        "home_elo": round(ratings.get(home_team, float(elo_initial)), 4) if home_elo_ready else None,
+        "away_elo": round(ratings.get(away_team, float(elo_initial)), 4) if away_elo_ready else None,
+    }
+
+
 def build_enigma_rating_v2_context(
     sportmonks_fixture_id: int,
     *,
@@ -221,6 +265,7 @@ def build_enigma_rating_v2_context(
         away_history = _aggregate_team_history(histories[str(target.away_team)])
 
         ratings: dict[str, float] = {}
+        elo_team_matches: dict[str, int] = {}
         elo_matches = 0
         for fixture in league_fixtures:
             snapshot = snapshot_map.get(int(fixture.id))
@@ -229,8 +274,10 @@ def build_enigma_rating_v2_context(
             home_score = _result_home_score(fixture, snapshot)
             if home_score is None:
                 continue
-            home_rating = ratings.get(str(fixture.home_team), float(elo_initial))
-            away_rating = ratings.get(str(fixture.away_team), float(elo_initial))
+            home_name = str(fixture.home_team)
+            away_name = str(fixture.away_team)
+            home_rating = ratings.get(home_name, float(elo_initial))
+            away_rating = ratings.get(away_name, float(elo_initial))
             new_home, new_away = elo_update(
                 home_rating,
                 away_rating,
@@ -238,8 +285,10 @@ def build_enigma_rating_v2_context(
                 k_factor=float(elo_k_factor),
                 home_advantage_elo=float(elo_home_advantage),
             )
-            ratings[str(fixture.home_team)] = new_home
-            ratings[str(fixture.away_team)] = new_away
+            ratings[home_name] = new_home
+            ratings[away_name] = new_away
+            elo_team_matches[home_name] = elo_team_matches.get(home_name, 0) + 1
+            elo_team_matches[away_name] = elo_team_matches.get(away_name, 0) + 1
             elo_matches += 1
 
         lineup_row = session.scalar(
@@ -261,20 +310,18 @@ def build_enigma_rating_v2_context(
                 }
             )
 
-    rating_inputs = {
-        "home_goals_for_avg": home_history["goals_for_avg"],
-        "away_goals_for_avg": away_history["goals_for_avg"],
-        "home_goals_against_avg": home_history["goals_against_avg"],
-        "away_goals_against_avg": away_history["goals_against_avg"],
-        "home_xg_for_avg": home_history["xg_for_avg"],
-        "away_xg_for_avg": away_history["xg_for_avg"],
-        "home_xg_against_avg": home_history["xg_against_avg"],
-        "away_xg_against_avg": away_history["xg_against_avg"],
-        "home_points_per_match_10": home_history["points_per_match"] if form_lookback == 10 else None,
-        "away_points_per_match_10": away_history["points_per_match"] if form_lookback == 10 else None,
-        "home_elo": round(ratings.get(str(target.home_team), float(elo_initial)), 4),
-        "away_elo": round(ratings.get(str(target.away_team), float(elo_initial)), 4),
-    }
+    home_team = str(target.home_team)
+    away_team = str(target.away_team)
+    rating_inputs = _rating_inputs_from_evidence(
+        home_history=home_history,
+        away_history=away_history,
+        ratings=ratings,
+        elo_team_matches=elo_team_matches,
+        home_team=home_team,
+        away_team=away_team,
+        elo_initial=float(elo_initial),
+        form_lookback=int(form_lookback),
+    )
 
     return {
         "status": "ok",
@@ -296,18 +343,30 @@ def build_enigma_rating_v2_context(
         "elo": {
             "history_days": int(elo_history_days),
             "matches_processed": elo_matches,
+            "team_matches": {
+                "home": int(elo_team_matches.get(home_team, 0)),
+                "away": int(elo_team_matches.get(away_team, 0)),
+            },
             "initial_rating": float(elo_initial),
             "k_factor": float(elo_k_factor),
             "home_advantage_elo": float(elo_home_advantage),
         },
         "lineup_context": lineup,
+        "evidence_thresholds": {
+            "rate_history_matches": MIN_RATE_HISTORY_MATCHES,
+            "xg_history_matches": MIN_XG_HISTORY_MATCHES,
+            "form_10_requires_matches_each_team": 10,
+            "elo_team_matches": MIN_ELO_TEAM_MATCHES,
+        },
         "policy": {
             "research_only": True,
             "history_strictly_before_target": True,
             "target_postgame_snapshot_used": False,
             "xga_is_opponent_xg_from_historical_match": True,
-            "form_10_requires_exact_10_match_request": True,
+            "thin_historical_evidence_is_not_promoted_to_rating_input": True,
+            "form_10_requires_complete_10_match_history_for_both_teams": True,
             "elo_only_uses_same_league_pre_target_results": True,
+            "unseen_or_thin_elo_history_is_not_imputed_as_1500_rating_input": True,
             "lineup_presence_is_observed_but_absence_impact_is_not_guessed": True,
         },
     }
