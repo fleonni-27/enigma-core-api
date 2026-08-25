@@ -22,6 +22,7 @@ jobs:
               "end_date": "2026-08-24",
               "leagues": "Serie A",
               "max_rows": 150,
+              "elo_warmup_days": 180,
               "include_rows": "true",
           })
           url = f"{base}/research/enigma-rating-v2/evaluation-v1?{params}"
