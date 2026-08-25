@@ -8,11 +8,17 @@ from datetime import date
 from fastapi import FastAPI
 
 from app import xg_historical_backfill
-from app.xg_backfill_memory_scan import latest_snapshot_rows_memory_bounded
+from app.xg_backfill_bounded_v2 import (
+    backfill_missing_xg_bounded,
+    candidate_rows_sql,
+    gap_status_sql,
+)
 
-# Replace only the scanner implementation. The public/status/run contracts and
-# append-only persistence semantics remain in xg_historical_backfill_v1.
-xg_historical_backfill._latest_snapshot_rows = latest_snapshot_rows_memory_bounded
+# Keep the stable V1 HTTP surface while replacing its scanner/runner internals
+# with SQL-filtered, memory-bounded implementations.
+xg_historical_backfill._candidate_rows = candidate_rows_sql
+xg_historical_backfill.xg_gap_status = gap_status_sql
+xg_historical_backfill.backfill_missing_xg = backfill_missing_xg_bounded
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
@@ -28,7 +34,7 @@ def _startup_config() -> dict:
         "start_date": date.fromisoformat(os.getenv("XG_BACKFILL_START_DATE", "2026-01-01")),
         "end_date": date.fromisoformat(os.getenv("XG_BACKFILL_END_DATE", "2026-08-24")),
         "leagues": leagues,
-        "limit": int(os.getenv("XG_BACKFILL_LIMIT", "1000")),
+        "limit": int(os.getenv("XG_BACKFILL_LIMIT", "250")),
         "concurrency": int(os.getenv("XG_BACKFILL_CONCURRENCY", "3")),
     }
 
