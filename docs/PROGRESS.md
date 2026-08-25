@@ -41,6 +41,8 @@ Research/modeling layer:
 - leakage-safe historical xG/xGA context
 - exact 10-match form context
 - explicit lineup/absence-impact contract with no guessed player values
+- Enigma Rating V2 Evaluation V1 temporal challenger report
+- paired goals-only vs xG/xGA ablation for Poisson and Dixon-Coles
 
 ## Promoted model versus research signals
 
@@ -54,7 +56,7 @@ The promoted prediction model remains `baseline_1x2_temporal_v1`:
 - no target-match lineup contribution;
 - no xG feature in the promoted STANDARD vector.
 
-Enigma Rating V2 does not silently replace this model. Poisson, Dixon-Coles, Elo, xG/xGA, form-10 and lineup impact remain research signals pending out-of-sample evaluation against the current baseline with Brier, Log Loss, calibration and CLV.
+Enigma Rating V2 does not silently replace this model. Poisson, Dixon-Coles, Elo, xG/xGA, form-10 and lineup impact remain research signals until temporal evaluation and forward-test evidence justify promotion.
 
 ## Enigma Rating V2
 
@@ -75,6 +77,40 @@ V2 component budget:
 Missing components are not imputed. Coverage is explicit and weights are renormalized only over observed/auditable evidence.
 
 `GET /rating/context-v2/{sportmonks_fixture_id}` builds research context automatically from historical database state strictly before target kickoff. J1 lineup presence is observable but is not treated as strength without an auditable player-value model.
+
+## Enigma Rating V2 Evaluation V1
+
+Canonical documentation: `docs/enigma-rating-v2-evaluation-v1.md`.
+
+Research endpoint:
+
+`GET /research/enigma-rating-v2/evaluation-v1`
+
+Implemented comparison set:
+
+- `STANDARD` (`baseline_1x2_temporal_v1`);
+- `POISSON_GOALS_ONLY`;
+- `POISSON_XG_XGA`;
+- `DIXON_COLES_GOALS_ONLY`;
+- `DIXON_COLES_XG_XGA`;
+- `ELO_DAVIDSON`.
+
+Evaluation policy:
+
+- canonical STANDARD train/validation/test temporal split is reused;
+- validation and test are reported separately;
+- test is the primary holdout;
+- challengers are evaluated in a chronological fixture stream;
+- all targets sharing a kickoff timestamp are scored before any result from that timestamp is allowed to update history;
+- target postgame data can update only later fixtures;
+- xG missing is never zero;
+- xG/xGA ablation is paired on common coverage;
+- form-10 is diagnostic only until a learned with/without-form specification exists;
+- no ensemble or hyperparameter promotion occurs in V1.
+
+Metrics include multiclass Brier, Log Loss, accuracy, average probability of the actual result, skill vs uniform and empirical climatology, predicted-class ECE/MCE, coverage, league breakdown and monthly breakdown.
+
+Evaluation V1 uses expanding pre-target Elo initialized at the warmup boundary. This is temporally safe but is explicitly distinguished from the per-target rolling-horizon Elo semantics in the single-fixture Rating V2 context; the two semantics must be standardized before Elo promotion.
 
 ## J1 Horizontal V1
 
@@ -135,15 +171,15 @@ Operational closure completed on 2026-08-25.
 
 ## CI and operational contract
 
-CI automatically discovers all `tests/test_*.py` modules and validates compile, migration chain and the J1 operational contract. Enigma Rating V2 probability, xG/xGA, lineup and route tests remain in the same regression gate.
+CI automatically discovers all `tests/test_*.py` modules and validates compile, migration chain and the J1 operational contract. Rating V2 Evaluation V1 metric, xG/xGA coverage, route-registration and no-write contract tests enter the same regression gate automatically.
 
 ## Current next milestones
 
-1. Observe the first real J1 horizontal fixture cycle through `enqueue -> claim -> Prediction -> Decision -> Ledger`.
-2. Establish an out-of-sample Rating V2 evaluation dataset and compute Brier/Log Loss/calibration for STANDARD, Poisson, Dixon-Coles and Elo.
-3. Add ablation analysis for xG/xGA and exact form-10 before choosing ensemble/blend weights.
+1. Run the first real Rating V2 Evaluation V1 report on a bounded historical interval and inspect coverage/runtime before scaling the date range.
+2. Use validation only to evaluate candidate Dixon-Coles rho and Elo K/home-advantage/draw parameters; keep test untouched for final comparison.
+3. Define a learned form-10 with/without ablation rather than an arbitrary PPM-to-probability transform.
 4. Persist a trustworthy injury/suspension availability feed and design a learned/auditable player contribution model before activating lineup absence scores automatically.
-5. Fit Dixon-Coles rho and Elo hyperparameters only on training history with temporal validation.
+5. Observe the first real J1 horizontal fixture cycle through `enqueue -> claim -> Prediction -> Decision -> Ledger`.
 
 ## Operational stack
 
@@ -152,6 +188,6 @@ CI automatically discovers all `tests/test_*.py` modules and validates compile, 
 - Deployment: Render web + J1 producer cron + three-instance background worker + Daily Analysis cron
 - Database: Supabase/PostgreSQL
 - Football data source: Sportmonks
-- Production API wrapper: `app.main_v017`, version `0.51.4`
+- Production API wrapper: `app.main_v017`, version `0.52.0` in this evaluation branch
 
-This document is the current engineering checkpoint. Operational command details belong in `docs/j1-operations-v1.md`; Rating V2 model details belong in `docs/enigma-rating-v2.md`.
+This document is the current engineering checkpoint. Operational command details belong in `docs/j1-operations-v1.md`; Rating V2 model details belong in `docs/enigma-rating-v2.md`; temporal challenger evaluation details belong in `docs/enigma-rating-v2-evaluation-v1.md`.
