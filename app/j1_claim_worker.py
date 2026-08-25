@@ -27,7 +27,6 @@ from app.j1_work_queue import (
     DEFAULT_RETRY_DELAY_SECONDS,
     claim_next_j1_work,
     complete_j1_work,
-    expire_past_kickoff_work,
     fail_j1_work,
     renew_j1_claim,
 )
@@ -60,11 +59,7 @@ def _worker_id() -> str:
 
 
 def _claim_log_view(claim: dict[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in claim.items()
-        if key != "claim_token"
-    }
+    return {key: value for key, value in claim.items() if key != "claim_token"}
 
 
 def _load_fixture(fixture_id: int) -> Fixture | None:
@@ -295,7 +290,9 @@ async def run_worker_loop() -> None:
     )
 
     while not stopping.is_set():
-        expire_past_kickoff_work()
+        # Post-kickoff expiry is owned by the producer once per minute. Workers
+        # only perform the indexed claim scan, avoiding N workers repeatedly
+        # sweeping the queue while idle.
         outcome = await process_one_claim(
             worker_id=worker_id,
             runtime=runtime,
