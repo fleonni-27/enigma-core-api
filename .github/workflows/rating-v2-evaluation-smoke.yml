@@ -1,0 +1,76 @@
+name: Rating V2 Evaluation Smoke
+
+on:
+  push:
+    branches:
+      - ops/rating-v2-evaluation-smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Run bounded production evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=100'
+          started=$(date +%s)
+          http_code=$(curl --silent --show-error --location \
+            --connect-timeout 30 \
+            --max-time 900 \
+            --output /tmp/evaluation.json \
+            --write-out '%{http_code}' \
+            "$url")
+          elapsed=$(( $(date +%s) - started ))
+          echo "HTTP_STATUS=${http_code}"
+          echo "ELAPSED_SECONDS=${elapsed}"
+          if [ "$http_code" != "200" ]; then
+            cat /tmp/evaluation.json
+            exit 1
+          fi
+
+      - name: Print compact evaluation evidence
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path('/tmp/evaluation.json').read_text())
+          test = (p.get('evaluation') or {}).get('test') or {}
+          validation = (p.get('evaluation') or {}).get('validation') or {}
+          models = test.get('models') or {}
+          compact = {
+              'status': p.get('status'),
+              'version': p.get('version'),
+              'baseline': p.get('baseline'),
+              'audit': p.get('audit'),
+              'validation_targets': validation.get('targets'),
+              'test_targets': test.get('targets'),
+              'test_models': {
+                  name: {
+                      'sample_size': metric.get('sample_size'),
+                      'coverage_pct': metric.get('coverage_pct'),
+                      'brier_multiclass': metric.get('brier_multiclass'),
+                      'log_loss': metric.get('log_loss'),
+                      'accuracy': metric.get('accuracy'),
+                      'average_probability_actual': metric.get('average_probability_actual'),
+                      'ece_pp': (metric.get('predicted_class_calibration') or {}).get('ece_pp'),
+                  }
+                  for name, metric in models.items()
+              },
+              'paired_vs_standard': test.get('paired_vs_standard'),
+              'xg_xga_ablation': (p.get('evaluation') or {}).get('test_xg_xga_ablation'),
+              'form10_diagnostic': {
+                  'eligible_targets': ((p.get('evaluation') or {}).get('test_form10_diagnostic') or {}).get('eligible_targets'),
+                  'coverage_pct': ((p.get('evaluation') or {}).get('test_form10_diagnostic') or {}).get('coverage_pct'),
+              },
+              'policy': p.get('policy'),
+          }
+          print(json.dumps(compact, ensure_ascii=False, indent=2, sort_keys=True))
+          PY
