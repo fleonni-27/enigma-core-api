@@ -5,6 +5,7 @@ from app.enigma_rating_v2_routes import router as enigma_rating_v2_fixture_route
 from app.enigma_rating_v2_evaluation import router as enigma_rating_v2_evaluation_router
 from app.enigma_rating_v2_evaluation_chronology import install_evaluation_v1_xg_chronology_fix
 from app.enigma_rating_v2_tuning import router as enigma_rating_v2_tuning_router
+from app.enigma_rating_v2_tuning_refinement import router as enigma_rating_v2_tuning_refinement_router
 from app.forward_test_report_v2 import router as forward_test_report_v2_router
 from app.forward_test_report_v3 import router as forward_test_report_v3_router
 from app.j1_work_api import router as j1_work_router
@@ -25,6 +26,7 @@ app.include_router(enigma_rating_v2_router)
 app.include_router(enigma_rating_v2_fixture_router)
 app.include_router(enigma_rating_v2_evaluation_router)
 app.include_router(enigma_rating_v2_tuning_router)
+app.include_router(enigma_rating_v2_tuning_refinement_router)
 app.include_router(performance_observatory_router)
 app.include_router(odds_window_clv_router)
 app.include_router(forward_test_report_v2_router)
