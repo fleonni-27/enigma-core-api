@@ -3,11 +3,16 @@ name: Daily Operations Sync
 on:
   workflow_dispatch:
   schedule:
-    # America/Sao_Paulo is UTC-3. GitHub Actions cron has minute precision,
-    # so 03:00 UTC is the midnight daily bootstrap.
+    # America/Sao_Paulo is UTC-3.
+    # 02:40 UTC = 23:40 previous local day: preload D+1.
+    - cron: "40 2 * * *"
+    # 03:00 UTC = 00:00 local: bootstrap current business day.
     - cron: "0 3 * * *"
-    # Refresh odds later in the same local day without manual fixture IDs.
+    # 09:00 UTC = 06:00 local: morning refresh for current day.
+    - cron: "0 9 * * *"
+    # 15:00 UTC = 12:00 local: midday refresh for current day.
     - cron: "0 15 * * *"
+    # 20:00 UTC = 17:00 local: retain late-day odds refresh.
     - cron: "0 20 * * *"
 
 permissions:
@@ -23,10 +28,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Resolve Sao Paulo date
+      - name: Resolve Sao Paulo target date
         id: date
         shell: bash
-        run: echo "today=$(TZ=America/Sao_Paulo date +%F)" >> "$GITHUB_OUTPUT"
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          local_today="$(TZ=America/Sao_Paulo date +%F)"
+          if [ "${SCHEDULE:-}" = "40 2 * * *" ]; then
+            target_date="$(TZ=America/Sao_Paulo date -d 'tomorrow' +%F)"
+            phase="D1_PRELOAD_2340"
+          elif [ "${SCHEDULE:-}" = "0 9 * * *" ]; then
+            target_date="${local_today}"
+            phase="DAY_REFRESH_0600"
+          elif [ "${SCHEDULE:-}" = "0 15 * * *" ]; then
+            target_date="${local_today}"
+            phase="DAY_REFRESH_1200"
+          elif [ "${SCHEDULE:-}" = "0 20 * * *" ]; then
+            target_date="${local_today}"
+            phase="DAY_REFRESH_1700"
+          elif [ "${SCHEDULE:-}" = "0 3 * * *" ]; then
+            target_date="${local_today}"
+            phase="DAY_BOOTSTRAP_0000"
+          else
+            target_date="${local_today}"
+            phase="MANUAL_CURRENT_DAY"
+          fi
+          echo "target_date=${target_date}" >> "$GITHUB_OUTPUT"
+          echo "phase=${phase}" >> "$GITHUB_OUTPUT"
+          echo "Resolved phase=${phase} target_date=${target_date}"
 
       - name: Mint Enigma OIDC token
         id: oidc
@@ -52,7 +83,6 @@ jobs:
               "https://enigma-core-api.onrender.com/operations/today" \
               >/tmp/operations-today.json; then
               echo "Operations route is ready on attempt ${attempt}"
-              cat /tmp/operations-today.json
               exit 0
             fi
             echo "Operations route not ready (attempt ${attempt}/12); retrying in 10s"
@@ -64,11 +94,12 @@ jobs:
       - name: Sync fixtures and prematch odds
         shell: bash
         env:
-          TARGET_DATE: ${{ steps.date.outputs.today }}
+          TARGET_DATE: ${{ steps.date.outputs.target_date }}
+          PHASE: ${{ steps.date.outputs.phase }}
           ENIGMA_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -euo pipefail
-          echo "Syncing Enigma Core for ${TARGET_DATE} (America/Sao_Paulo)"
+          echo "Syncing Enigma Core phase=${PHASE} target_date=${TARGET_DATE} (America/Sao_Paulo)"
           curl --fail-with-body \
             --retry 6 \
             --retry-all-errors \
@@ -83,10 +114,20 @@ jobs:
           cat /tmp/daily-sync.json
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           payload = json.loads(Path('/tmp/daily-sync.json').read_text())
           if payload.get('status') != 'ok':
               raise SystemExit(f"daily sync returned non-ok status: {payload.get('status')}")
-          print('Daily Operations Sync completed with status=ok')
+          expected = os.environ['TARGET_DATE']
+          actual = payload.get('target_date')
+          if actual != expected:
+              raise SystemExit(f"daily sync target mismatch: expected={expected} actual={actual}")
+          print(
+              'Daily Operations Sync completed',
+              f"phase={os.environ['PHASE']}",
+              f"target_date={actual}",
+              f"target_fixtures={(payload.get('target_fixtures') or {}).get('count')}",
+          )
           PY
