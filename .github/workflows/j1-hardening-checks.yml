@@ -9,7 +9,7 @@ on:
       - "scripts/**"
       - "docs/**"
       - "README.md"
-      - "render.yaml"
+      - "render*.yaml"
       - "alembic.ini"
       - "requirements.txt"
       - ".github/workflows/**"

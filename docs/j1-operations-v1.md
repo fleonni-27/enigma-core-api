@@ -52,6 +52,16 @@ Desired J1 Horizontal V1 topology:
 
 Horizontal worker scaling does not partition fixtures manually. Each instance competes safely for the next eligible queue row.
 
+### Worker-only bootstrap Blueprint
+
+`render.worker.yaml` is the provisioning-only Blueprint for the currently missing worker service. It intentionally contains **only** `enigma-j1-worker`, so provisioning the worker cannot adopt, duplicate or overwrite the already-live web API or J1 cron configuration.
+
+The bootstrap worker must remain identical to the canonical worker declaration in `render.yaml` for runtime, region, branch, plan, instance count, drain time, build/start commands and environment-variable wiring. CI validates this equality.
+
+Provision it in Render using a new Blueprint linked to the existing repository/`main` branch and set the Blueprint Path to `render.worker.yaml`. `DATABASE_URL` and `SPORTMONKS_API_TOKEN` resolve from the existing `enigma-core-api` service through `fromService.envVarKey`; no secret value is copied into GitHub.
+
+After provisioning, the bootstrap Blueprint owns only `enigma-j1-worker`. Do not attach the same worker to a second Blueprint.
+
 ## Capacity and timing
 
 - J1 target: kickoff minus 45 minutes.
@@ -79,7 +89,7 @@ Claim safety:
 
 The cron must remain in `batch` until a real Render worker service exists and all three instances are healthy.
 
-1. Provision/sync `enigma-j1-worker` from the Blueprint.
+1. Provision `enigma-j1-worker` using the worker-only `render.worker.yaml` Blueprint.
 2. Confirm the service runs `python -m app.j1_claim_worker`.
 3. Confirm three distinct healthy Render worker instances and successful database polling.
 4. Confirm there is no crash loop or missing-secret/database error.
@@ -127,8 +137,8 @@ The fallback currently requests a conservative maximum of five fixtures. It does
 - run test discovery across every `tests/test_*.py` module;
 - trigger when application, test, migration, script, Render, workflow or documentation contracts change.
 
-The validator fails CI if entrypoints, Render topology, secret references, worker count, fail-safe mode or canonical documentation drift apart.
+The validator fails CI if entrypoints, Render topology, secret references, worker count, fail-safe mode, worker bootstrap Blueprint or canonical documentation drift apart.
 
 ## Current operational state — 2026-08-25
 
-Code, migration, work queue, claim worker, three-instance Blueprint declaration, secret-reference wiring and the batch/producer gate are implemented. The Render cron is explicitly kept in `J1_EXECUTION_MODE=batch` until the real `enigma-j1-worker` service has been provisioned and three healthy instances are observed.
+Code, migration, work queue, claim worker, three-instance canonical Blueprint declaration, worker-only bootstrap Blueprint, secret-reference wiring and the batch/producer gate are implemented. The Render cron is explicitly kept in `J1_EXECUTION_MODE=batch` until the real `enigma-j1-worker` service has been provisioned and three healthy instances are observed.
