@@ -13,7 +13,7 @@ from app.daily_analysis_report import router as daily_analysis_report_router
 
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
-app.version = "0.51.3"
+app.version = "0.51.4"
 app.include_router(enigma_rating_router)
 app.include_router(enigma_rating_v2_router)
 app.include_router(enigma_rating_v2_fixture_router)
