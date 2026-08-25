@@ -7,6 +7,7 @@ from threading import Lock
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import BigInteger, Date, DateTime, Identity, String, UniqueConstraint, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,6 +20,7 @@ DAILY_ANALYSIS_REPORT_VERSION = "daily_analysis_report_v1"
 BUSINESS_TIMEZONE = "America/Sao_Paulo"
 _schema_lock = Lock()
 _schema_ready = False
+router = APIRouter(prefix="/research/daily-analysis", tags=["research"])
 
 
 class DailyAnalysisReport(Base):
@@ -116,6 +118,24 @@ async def generate_daily_analysis_report(report_date: date | None = None) -> dic
         "storage": stored,
         "report_overview": report.get("overview"),
     }
+
+
+@router.get("/latest")
+def latest_daily_analysis_report_endpoint() -> dict[str, Any]:
+    payload = latest_daily_report()
+    return {"status": "ok", "version": DAILY_ANALYSIS_REPORT_VERSION, "latest": payload}
+
+
+@router.post("/generate")
+async def generate_daily_analysis_report_endpoint(
+    report_date: date | None = Query(default=None),
+) -> dict[str, Any]:
+    try:
+        return await generate_daily_analysis_report(report_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail={"status": "failed", "error": exc.__class__.__name__}) from exc
 
 
 def main() -> None:
