@@ -31,9 +31,18 @@ def activate_j1_runner_capacity() -> dict[str, Any]:
     legacy implementation. The scheduler owns scale policy now: this function
     raises only that safety ceiling to 20. The active per-cycle limit still comes
     from J1_MAX_FIXTURES (5, 10, or 20) and is always passed explicitly.
+
+    Dedicated claim workers do not import main_v017, so they install the frozen
+    confirmation-holdout ledger hook here during worker activation. This changes
+    no J1 decision semantics; it only registers an already-persisted immutable
+    forward record in the research holdout registry.
     """
     from app import daily_prediction_runner_v2 as runner_module
+    from app.enigma_rating_v2_confirmation_hook import (
+        install_confirmation_holdout_j1_hook,
+    )
 
+    install_confirmation_holdout_j1_hook()
     previous = int(runner_module.MAX_FIXTURES_PER_RUN)
     runner_module.MAX_FIXTURES_PER_RUN = HARD_MAX_J1_FIXTURES
     return {
@@ -43,4 +52,5 @@ def activate_j1_runner_capacity() -> dict[str, Any]:
         "hard_max_fixtures": HARD_MAX_J1_FIXTURES,
         "previous_runner_hard_max": previous,
         "stages": list(J1_FIXTURE_STAGES),
+        "confirmation_holdout_capture_hook_installed": True,
     }
