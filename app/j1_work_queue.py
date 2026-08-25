@@ -53,7 +53,13 @@ class J1WorkItem(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    # Production stays BIGINT. SQLite needs INTEGER PRIMARY KEY semantics in
+    # unit tests so inserts can exercise the real claim transitions.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        Identity(),
+        primary_key=True,
+    )
     fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
     sportmonks_fixture_id: Mapped[int] = mapped_column(BigInteger, index=True)
     snapshot_window: Mapped[str] = mapped_column(String(30), index=True)
@@ -67,7 +73,11 @@ class J1WorkItem(Base):
     claimed_by: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
 
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     result_status: Mapped[str | None] = mapped_column(String(60), nullable=True)
@@ -104,8 +114,12 @@ def ensure_j1_work_queue_schema() -> None:
         _schema_ready = True
 
 
-def _work_dict(row: J1WorkItem) -> dict[str, Any]:
-    return {
+def work_item_dict(
+    row: J1WorkItem,
+    *,
+    include_claim_token: bool = False,
+) -> dict[str, Any]:
+    payload = {
         "id": int(row.id),
         "fixture_id": int(row.fixture_id),
         "sportmonks_fixture_id": int(row.sportmonks_fixture_id),
@@ -116,7 +130,6 @@ def _work_dict(row: J1WorkItem) -> dict[str, Any]:
         "attempt_count": int(row.attempt_count or 0),
         "available_at": _aware_utc(row.available_at).isoformat(),
         "claimed_by": row.claimed_by,
-        "claim_token": row.claim_token,
         "claimed_at": _aware_utc(row.claimed_at).isoformat() if row.claimed_at else None,
         "lease_expires_at": (
             _aware_utc(row.lease_expires_at).isoformat() if row.lease_expires_at else None
@@ -125,6 +138,9 @@ def _work_dict(row: J1WorkItem) -> dict[str, Any]:
         "result_status": row.result_status,
         "last_error": row.last_error,
     }
+    if include_claim_token:
+        payload["claim_token"] = row.claim_token
+    return payload
 
 
 def enqueue_due_j1_work(
@@ -175,7 +191,8 @@ def enqueue_due_j1_work(
                 created += 1
             else:
                 existing += 1
-            items.append(_work_dict(row))
+            # Claim tokens are capabilities and never leave the worker path.
+            items.append(work_item_dict(row))
         session.commit()
 
     return {
@@ -191,6 +208,7 @@ def enqueue_due_j1_work(
             "queue_backend": "postgres",
             "claim_strategy": "for_update_skip_locked",
             "unique_fixture_snapshot_window": True,
+            "claim_tokens_not_exposed_in_producer_payloads": True,
             "ledger_remains_final_idempotency_authority": True,
         },
     }
@@ -270,8 +288,7 @@ def claim_next_j1_work(
         row.last_error = None
         session.commit()
         session.refresh(row)
-        result = _work_dict(row)
-        return result
+        return work_item_dict(row, include_claim_token=True)
 
 
 def renew_j1_claim(
@@ -385,13 +402,21 @@ def fail_j1_work(
             row.finished_at = effective_now
         session.commit()
         session.refresh(row)
-        return _work_dict(row)
+        return work_item_dict(row)
 
 
 def queue_status(*, now: datetime | None = None) -> dict[str, Any]:
     ensure_j1_work_queue_schema()
     effective_now = _aware_utc(now or datetime.now(timezone.utc))
-    counts = {status: 0 for status in [STATUS_PENDING, STATUS_CLAIMED, STATUS_RETRY, STATUS_COMPLETED, STATUS_FAILED, STATUS_EXPIRED]}
+    statuses = [
+        STATUS_PENDING,
+        STATUS_CLAIMED,
+        STATUS_RETRY,
+        STATUS_COMPLETED,
+        STATUS_FAILED,
+        STATUS_EXPIRED,
+    ]
+    counts = {status: 0 for status in statuses}
     with SessionLocal() as session:
         rows = session.execute(
             select(J1WorkItem.status, func.count(J1WorkItem.id)).group_by(J1WorkItem.status)
