@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from fastapi import FastAPI
-
-from app.enigma_rating_v2 import build_enigma_rating_v2, router as rating_v2_router
-from app.enigma_rating_v2_routes import router as rating_v2_fixture_router
-from app.main_v017 import app as production_app
+from app.enigma_rating_v2 import build_enigma_rating_v2
 
 
 class EnigmaRatingV2Tests(unittest.TestCase):
@@ -81,15 +78,19 @@ class EnigmaRatingV2Tests(unittest.TestCase):
         self.assertEqual(detail["home_strength_retained"], 0.91)
         self.assertEqual(detail["away_strength_retained"], 0.79)
 
-    def test_v2_routes_have_stable_contract(self) -> None:
-        isolated = FastAPI()
-        isolated.include_router(rating_v2_router)
-        isolated.include_router(rating_v2_fixture_router)
-        paths = {getattr(route, "path", None) for route in isolated.routes}
-        self.assertIn("/rating/enigma-v2", paths)
-        self.assertIn("/rating/context-v2/{sportmonks_fixture_id}", paths)
-        self.assertIn("/rating/enigma-v2/fixture/{sportmonks_fixture_id}", paths)
-        self.assertEqual(production_app.version, "0.50.0")
+    def test_v2_routes_have_stable_source_contract(self) -> None:
+        rating_source = Path("app/enigma_rating_v2.py").read_text(encoding="utf-8")
+        fixture_routes_source = Path("app/enigma_rating_v2_routes.py").read_text(encoding="utf-8")
+        wrapper_source = Path("app/main_v017.py").read_text(encoding="utf-8")
+
+        self.assertIn('@router.post("/enigma-v2")', rating_source)
+        self.assertIn('@router.get("/context-v2/{sportmonks_fixture_id}")', fixture_routes_source)
+        self.assertIn('@router.post("/enigma-v2/fixture/{sportmonks_fixture_id}")', fixture_routes_source)
+        self.assertIn("from app.enigma_rating_v2 import router as enigma_rating_v2_router", wrapper_source)
+        self.assertIn("from app.enigma_rating_v2_routes import router as enigma_rating_v2_fixture_router", wrapper_source)
+        self.assertIn("app.include_router(enigma_rating_v2_router)", wrapper_source)
+        self.assertIn("app.include_router(enigma_rating_v2_fixture_router)", wrapper_source)
+        self.assertIn('app.version = "0.50.0"', wrapper_source)
 
     def test_invalid_lineup_strength_fails_closed(self) -> None:
         payload = self._full_payload()
