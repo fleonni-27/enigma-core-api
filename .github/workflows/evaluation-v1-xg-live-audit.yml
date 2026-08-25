@@ -22,7 +22,6 @@ jobs:
               "end_date": "2026-08-24",
               "leagues": "Serie A",
               "max_rows": 150,
-              "elo_warmup_days": 180,
               "include_rows": "true",
           })
           url = f"{base}/research/enigma-rating-v2/evaluation-v1?{params}"
@@ -39,16 +38,16 @@ jobs:
               "test_targets": test.get("targets"),
               "poisson_xg": models.get("POISSON_XG_XGA"),
               "dixon_coles_xg": models.get("DIXON_COLES_XG_XGA"),
-              "sample_context_audit": [
-                  row.get("context_audit")
-                  for row in (payload.get("rows") or [])
-                  if row.get("partition") == "test"
-              ][:5],
           }
           print("EVALUATION_V1_XG_LIVE_AUDIT=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
           assert payload.get("status") == "ok"
+          assert audit.get("elo_warmup_days") == 1460
           assert audit.get("xg_chronology_version") == "evaluation_v1_xg_chronology_v1"
+          assert audit.get("loader_version") == "evaluation_v1_streaming_loader_v1"
+          assert int(audit.get("fixture_page_size") or 0) <= 128
+          assert int(audit.get("max_fixture_page_rows") or 0) <= int(audit.get("fixture_page_size") or 0)
+          assert int(audit.get("max_latest_snapshots_in_page") or 0) <= int(audit.get("fixture_page_size") or 0)
           assert int(audit.get("snapshots_with_nonempty_xg") or 0) > 0
           assert int(audit.get("payloads_with_full_parsed_xg") or 0) > 0
           assert int(audit.get("team_complete_xg_observations_appended") or 0) > 0
