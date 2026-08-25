@@ -46,6 +46,7 @@ on:
       - "tests/test_internal_endpoint_auth.py"
       - "tests/test_j1_hardening.py"
       - "tests/test_j1_pending_selector_v2.py"
+      - "tests/test_j1_render_cutover.py"
       - "tests/test_j1_work_claiming.py"
       - "tests/test_inference_runtime_v2.py"
       - "tests/test_inference_fit_cache.py"
@@ -82,4 +83,4 @@ jobs:
       - name: Validate Alembic migration chain
         run: alembic upgrade head
       - name: Run J1 hardening and scale tests
-        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_db_performance_migrations tests.test_forward_test_report_v2 tests.test_forward_test_report_v3 tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_j1_work_claiming tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_odds_quote_dedupe tests.test_odds_window_clv tests.test_performance_observatory tests.test_performance_scale_v1 tests.test_snapshot_recovery_2026 tests.test_sportmonks_resilience -v
+        run: python -m unittest tests.test_dashboard_operations_v2_bulk tests.test_dashboard_operations_v2_health_chain tests.test_db_performance_migrations tests.test_forward_test_report_v2 tests.test_forward_test_report_v3 tests.test_internal_endpoint_auth tests.test_j1_hardening tests.test_j1_pending_selector_v2 tests.test_j1_render_cutover tests.test_j1_work_claiming tests.test_inference_runtime_v2 tests.test_inference_fit_cache tests.test_odds_quote_dedupe tests.test_odds_window_clv tests.test_performance_observatory tests.test_performance_scale_v1 tests.test_snapshot_recovery_2026 tests.test_sportmonks_resilience -v

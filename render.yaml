@@ -2,6 +2,7 @@ services:
   - type: web
     name: enigma-core-api
     runtime: python
+    region: virginia
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
@@ -23,29 +24,40 @@ services:
   - type: cron
     name: enigma-j1-runner
     runtime: python
+    region: virginia
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    # Producer-only J1 role. It discovers due fixtures, writes idempotent work
-    # claims to Postgres, and keeps Closing/CLV isolated. Prediction/Decision/
-    # Ledger execution belongs to the workers below.
-    startCommand: python -m app.j1_work_producer
+    # Keep the existing command during cutover. J1_EXECUTION_MODE defaults to
+    # batch and is flipped to producer only after all worker instances are
+    # confirmed healthy. app.j1_scheduler delegates producer mode to the
+    # canonical app.j1_work_producer implementation.
+    startCommand: python -m app.j1_scheduler
     schedule: "* * * * *"
     envVars:
       - key: APP_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: DATABASE_URL
       - key: SPORTMONKS_API_TOKEN
-        sync: false
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: SPORTMONKS_API_TOKEN
       - key: SPORTMONKS_BASE_URL
         value: https://api.sportmonks.com/v3/football
       - key: J1_MAX_FIXTURES
         value: "20"
+      - key: J1_EXECUTION_MODE
+        value: batch
 
   - type: worker
     name: enigma-j1-worker
     runtime: python
+    region: virginia
     branch: main
     autoDeploy: true
     plan: starter
@@ -57,9 +69,15 @@ services:
       - key: APP_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: DATABASE_URL
       - key: SPORTMONKS_API_TOKEN
-        sync: false
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: SPORTMONKS_API_TOKEN
       - key: SPORTMONKS_BASE_URL
         value: https://api.sportmonks.com/v3/football
       - key: J1_MAX_FIXTURES
