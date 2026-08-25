@@ -7,11 +7,17 @@ from app.enigma_rating_v2_evaluation_chronology import install_evaluation_v1_xg_
 from app.enigma_rating_v2_tuning import router as enigma_rating_v2_tuning_router
 from app.enigma_rating_v2_tuning_refinement import router as enigma_rating_v2_tuning_refinement_router
 from app.enigma_rating_v2_frozen_params import router as enigma_rating_v2_frozen_params_router
+from app.enigma_rating_v2_confirmation_holdout import (
+    install_confirmation_holdout_startup,
+    router as enigma_rating_v2_confirmation_holdout_router,
+)
+from app.enigma_rating_v2_confirmation_hook import install_confirmation_holdout_j1_hook
 from app.forward_test_report_v2 import router as forward_test_report_v2_router
 from app.forward_test_report_v3 import router as forward_test_report_v3_router
 from app.j1_work_api import router as j1_work_router
 from app.performance_observatory import router as performance_observatory_router
 from app.odds_window_clv import router as odds_window_clv_router
+from app.dashboard_confirmation_holdout_v1 import router as dashboard_confirmation_holdout_router
 from app.dashboard_match_center_v3_5m import router as dashboard_match_center_v3_router
 from app.dashboard_match_center_alias import router as dashboard_match_center_alias_router
 from app.daily_analysis_report import router as daily_analysis_report_router
@@ -22,6 +28,8 @@ from app.xg_backfill_startup import install_xg_backfill_startup
 # compatibility with Render services whose start command has not been updated.
 app.version = "0.53.0"
 install_evaluation_v1_xg_chronology_fix()
+install_confirmation_holdout_j1_hook()
+install_confirmation_holdout_startup(app)
 app.include_router(enigma_rating_router)
 app.include_router(enigma_rating_v2_router)
 app.include_router(enigma_rating_v2_fixture_router)
@@ -29,11 +37,16 @@ app.include_router(enigma_rating_v2_evaluation_router)
 app.include_router(enigma_rating_v2_tuning_router)
 app.include_router(enigma_rating_v2_tuning_refinement_router)
 app.include_router(enigma_rating_v2_frozen_params_router)
+app.include_router(enigma_rating_v2_confirmation_holdout_router)
 app.include_router(performance_observatory_router)
 app.include_router(odds_window_clv_router)
 app.include_router(forward_test_report_v2_router)
 app.include_router(forward_test_report_v3_router)
 app.include_router(j1_work_router)
+# Confirmation-aware routes are intentionally registered before the legacy V3
+# routes so the public Match Center path receives the holdout overlay while the
+# underlying bounded dashboard builder remains unchanged.
+app.include_router(dashboard_confirmation_holdout_router)
 app.include_router(dashboard_match_center_v3_router)
 app.include_router(dashboard_match_center_alias_router)
 app.include_router(daily_analysis_report_router)
