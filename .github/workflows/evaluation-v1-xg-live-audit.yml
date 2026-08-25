@@ -1,4 +1,4 @@
-name: Enigma Rating V2 Frozen Manifest Audit
+name: Enigma Rating V2 Confirmation Holdout Dashboard Audit
 
 on:
   push:
@@ -9,48 +9,87 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate production frozen tuning manifest
+      - name: Validate live holdout status and Match Center
         run: |
           python - <<'PY'
           import json
+          import urllib.parse
           import urllib.request
 
-          url = "https://enigma-core-api.onrender.com/research/enigma-rating-v2/frozen-v1"
-          with urllib.request.urlopen(url, timeout=120) as response:
-              payload = json.load(response)
+          base = "https://enigma-core-api.onrender.com"
+          sha = "3d7a37a3c81cf383f08057e6ecfa1b8cf18abe5a2a7421698fdcf31acb736dcc"
 
-          frozen = payload.get("frozen_parameters") or {}
-          elo = frozen.get("elo") or {}
-          dc = frozen.get("dixon_coles") or {}
-          holdout = payload.get("confirmation_holdout") or {}
-          policy = payload.get("policy") or {}
+          def get_json(path):
+              with urllib.request.urlopen(base + path, timeout=120) as response:
+                  return json.load(response)
+
+          status = get_json("/research/enigma-rating-v2/confirmation-holdout-v1/status")
+          dashboard = get_json("/dashboard/api/match-center-v3?target_date=2026-08-25")
+          with urllib.request.urlopen(base + "/dashboard/match-center-v3?target_date=2026-08-25", timeout=120) as response:
+              html = response.read().decode("utf-8")
 
           summary = {
-              "status": payload.get("status"),
-              "version": payload.get("version"),
-              "selection_sha256": payload.get("selection_sha256"),
-              "selection": payload.get("selection"),
-              "frozen_parameters": frozen,
-              "confirmation_holdout": holdout,
-              "policy": policy,
+              "holdout": {
+                  key: status.get(key)
+                  for key in (
+                      "status", "version", "selection_sha256", "start_date",
+                      "minimum_eligible_targets", "captured_targets",
+                      "settled_eligible_targets", "remaining_to_confirmation",
+                      "progress_pct", "progress_counter", "ready_for_confirmation",
+                      "performance_metrics_visible",
+                  )
+              },
+              "targets": status.get("targets") or [],
+              "dashboard_version": dashboard.get("version"),
+              "dashboard_holdout": dashboard.get("confirmation_holdout"),
+              "dashboard_fixtures": [
+                  {
+                      "fixture_id": f.get("fixture_id"),
+                      "sportmonks_fixture_id": f.get("sportmonks_fixture_id"),
+                      "league": f.get("league"),
+                      "home_team": f.get("home_team"),
+                      "away_team": f.get("away_team"),
+                      "stage": f.get("stage"),
+                      "confirmation_holdout": f.get("confirmation_holdout"),
+                  }
+                  for f in (dashboard.get("fixtures") or [])
+              ],
+              "html_has_holdout_panel": "ENIGMA RATING V2 · CONFIRMATION HOLDOUT" in html,
+              "html_has_no_peeking": "NO PEEKING" in html,
           }
-          print("ENIGMA_RATING_V2_FROZEN_MANIFEST=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          print("ENIGMA_CONFIRMATION_DASHBOARD_AUDIT=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
-          assert payload.get("status") == "FROZEN"
-          assert payload.get("version") == "enigma_rating_v2_frozen_tuning_v1"
-          assert payload.get("selection_sha256") == "3d7a37a3c81cf383f08057e6ecfa1b8cf18abe5a2a7421698fdcf31acb736dcc"
-          assert elo.get("initial") == 1500.0
-          assert elo.get("k_factor") == 45.0
-          assert elo.get("home_advantage") == 110.0
-          assert elo.get("draw_parameter") == 0.5
-          assert elo.get("warmup_days") == 1460
-          assert dc.get("rho") == 0.24
-          assert frozen.get("poisson_home_multiplier") == 1.08
-          assert holdout.get("status") == "RESERVED_UNTOUCHED"
-          assert holdout.get("start_date") == "2026-08-25"
-          assert holdout.get("minimum_eligible_targets") == 100
-          assert holdout.get("performance_peeking_before_minimum_targets_allowed") is False
-          assert holdout.get("retuning_with_holdout_data_allowed") is False
-          assert policy.get("no_further_parameter_search_before_confirmation") is True
-          assert policy.get("production_standard_model_unchanged") is True
+          assert status.get("selection_sha256") == sha
+          assert status.get("start_date") == "2026-08-25"
+          assert status.get("minimum_eligible_targets") == 100
+          assert status.get("performance_metrics_visible") is False
+          assert status.get("metrics_locked_until_minimum_targets") is True
+          assert (status.get("policy") or {}).get("no_peeking") is True
+          assert dashboard.get("version") == "dashboard_confirmation_holdout_v1"
+          assert (dashboard.get("confirmation_holdout") or {}).get("selection_sha256") == sha
+          assert (dashboard.get("policy") or {}).get("confirmation_holdout_dashboard_connected") is True
+          assert summary["html_has_holdout_panel"] is True
+          assert summary["html_has_no_peeking"] is True
+
+          forbidden = {"brier", "brier_multiclass", "log_loss", "accuracy", "ece", "mce"}
+          def keys(value):
+              found = set()
+              if isinstance(value, dict):
+                  found.update(value.keys())
+                  for child in value.values():
+                      found.update(keys(child))
+              elif isinstance(value, list):
+                  for child in value:
+                      found.update(keys(child))
+              return found
+          assert forbidden.isdisjoint(keys(status))
+
+          allowed_states = {
+              "CANDIDATE_WAITING_J1", "CAPTURED_PREMATCH", "SETTLED_TARGET",
+              "NOT_IN_CONFIRMATION_HOLDOUT", None,
+          }
+          assert all(
+              ((f.get("confirmation_holdout") or {}).get("status") in allowed_states)
+              for f in (dashboard.get("fixtures") or [])
+          )
           PY
