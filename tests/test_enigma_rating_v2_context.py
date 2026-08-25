@@ -8,6 +8,7 @@ from app.enigma_rating_v2_context import (
     _aggregate_team_history,
     _lineup_summary,
     _observation_from_snapshot,
+    _rating_inputs_from_evidence,
 )
 
 
@@ -66,6 +67,71 @@ class EnigmaRatingV2ContextTests(unittest.TestCase):
         self.assertEqual(result["starter_player_ids"], [101, 102, 201])
         self.assertFalse(result["impact_scored"])
         self.assertEqual(result["impact_reason"], "PLAYER_ABSENCE_VALUE_MODEL_NOT_AVAILABLE")
+
+    def test_exact_form_10_and_elo_require_minimum_evidence(self) -> None:
+        home = {
+            "history_matches": 10,
+            "points_per_match": 2.0,
+            "goals_for_avg": 1.7,
+            "goals_against_avg": 0.9,
+            "xg_for_avg": 1.8,
+            "xg_against_avg": 0.95,
+            "xg_for_history_matches": 10,
+            "xg_against_history_matches": 10,
+        }
+        away = {
+            "history_matches": 9,
+            "points_per_match": 1.4,
+            "goals_for_avg": 1.2,
+            "goals_against_avg": 1.3,
+            "xg_for_avg": 1.25,
+            "xg_against_avg": 1.4,
+            "xg_for_history_matches": 9,
+            "xg_against_history_matches": 9,
+        }
+        result = _rating_inputs_from_evidence(
+            home_history=home,
+            away_history=away,
+            ratings={"Home FC": 1550.0, "Away FC": 1490.0},
+            elo_team_matches={"Home FC": 8, "Away FC": 4},
+            home_team="Home FC",
+            away_team="Away FC",
+            elo_initial=1500.0,
+            form_lookback=10,
+        )
+        self.assertIsNone(result["home_points_per_match_10"])
+        self.assertIsNone(result["away_points_per_match_10"])
+        self.assertEqual(result["home_elo"], 1550.0)
+        self.assertIsNone(result["away_elo"])
+        self.assertEqual(result["home_xg_against_avg"], 0.95)
+
+    def test_thin_goal_and_xg_history_is_not_promoted_to_rating_input(self) -> None:
+        thin = {
+            "history_matches": 2,
+            "points_per_match": 1.5,
+            "goals_for_avg": 1.4,
+            "goals_against_avg": 1.1,
+            "xg_for_avg": 1.5,
+            "xg_against_avg": 1.0,
+            "xg_for_history_matches": 2,
+            "xg_against_history_matches": 2,
+        }
+        result = _rating_inputs_from_evidence(
+            home_history=thin,
+            away_history=thin,
+            ratings={},
+            elo_team_matches={},
+            home_team="Home FC",
+            away_team="Away FC",
+            elo_initial=1500.0,
+            form_lookback=10,
+        )
+        self.assertIsNone(result["home_goals_for_avg"])
+        self.assertIsNone(result["away_goals_against_avg"])
+        self.assertIsNone(result["home_xg_for_avg"])
+        self.assertIsNone(result["away_xg_against_avg"])
+        self.assertIsNone(result["home_elo"])
+        self.assertIsNone(result["away_elo"])
 
 
 if __name__ == "__main__":
