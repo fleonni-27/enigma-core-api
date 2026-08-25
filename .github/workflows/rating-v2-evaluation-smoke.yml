@@ -14,72 +14,60 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Run bounded production evaluation
+      - name: Audit persisted snapshot evidence
         shell: bash
         run: |
           set -euo pipefail
-          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=500&include_rows=true'
-          started=$(date +%s)
-          http_code=$(curl --silent --show-error --location \
-            --connect-timeout 30 \
-            --max-time 900 \
-            --output /tmp/evaluation.json \
-            --write-out '%{http_code}' \
-            "$url")
-          elapsed=$(( $(date +%s) - started ))
-          echo "HTTP_STATUS=${http_code}"
-          echo "ELAPSED_SECONDS=${elapsed}"
-          if [ "$http_code" != "200" ]; then
-            cat /tmp/evaluation.json
-            exit 1
-          fi
+          for fixture_id in 19453590 19453588 19453594; do
+            url="https://enigma-core-api.onrender.com/audit/fixture/${fixture_id}?include_raw=true&sample_size=3"
+            code=$(curl --silent --show-error --location \
+              --connect-timeout 30 \
+              --max-time 120 \
+              --output "/tmp/audit-${fixture_id}.json" \
+              --write-out '%{http_code}' \
+              "$url")
+            echo "FIXTURE=${fixture_id} HTTP_STATUS=${code}"
+            if [ "$code" != "200" ]; then
+              cat "/tmp/audit-${fixture_id}.json"
+              exit 1
+            fi
+          done
 
-      - name: Print xG evidence diagnostics
+      - name: Print compact snapshot xG audit
         shell: bash
         run: |
           python - <<'PY'
           import json
-          from collections import Counter
           from pathlib import Path
 
-          p = json.loads(Path('/tmp/evaluation.json').read_text())
-          rows = [r for r in (p.get('rows') or []) if r.get('partition') == 'test']
-          keys = [
-              'home_history_matches',
-              'away_history_matches',
-              'home_xg_for_history_matches',
-              'home_xg_against_history_matches',
-              'away_xg_for_history_matches',
-              'away_xg_against_history_matches',
-          ]
+          def summarize(payload):
+              snapshots = payload.get('snapshots') or []
+              rows = []
+              for snap in snapshots:
+                  xg = snap.get('xg')
+                  stats = snap.get('statistics')
+                  rows.append({
+                      'snapshot_id': snap.get('id') or snap.get('snapshot_id'),
+                      'fetched_at': snap.get('fetched_at'),
+                      'source': snap.get('source'),
+                      'statistics_count': len(stats) if isinstance(stats, list) else (1 if stats else 0),
+                      'xg_count': len(xg) if isinstance(xg, list) else (1 if xg else 0),
+                      'xg_type_names': sorted({
+                          str(((r.get('type') or {}).get('name') or (r.get('type') or {}).get('developer_name') or r.get('type_id')))
+                          for r in (xg or []) if isinstance(r, dict)
+                      }) if isinstance(xg, list) else [],
+                      'xg_sample': (xg or [])[:2] if isinstance(xg, list) else xg,
+                  })
+              return {
+                  'status': payload.get('status'),
+                  'fixture': payload.get('fixture'),
+                  'snapshot_count': len(snapshots),
+                  'snapshots': rows,
+              }
 
-          distributions = {
-              key: dict(sorted(Counter(int((r.get('context_audit') or {}).get(key) or 0) for r in rows).items()))
-              for key in keys
-          }
-          full_xg_ready = [
-              r for r in rows
-              if all(int((r.get('context_audit') or {}).get(key) or 0) >= 3 for key in keys[2:])
-          ]
-          samples = []
-          for r in rows[:10]:
-              audit = r.get('context_audit') or {}
-              samples.append({
-                  'sportmonks_fixture_id': r.get('sportmonks_fixture_id'),
-                  'starts_at': r.get('starts_at'),
-                  'home_team': r.get('home_team'),
-                  'away_team': r.get('away_team'),
-                  'xg_counts': {key: audit.get(key) for key in keys[2:]},
-                  'history_counts': {key: audit.get(key) for key in keys[:2]},
-              })
-
-          diagnostic = {
-              'status': p.get('status'),
-              'version': p.get('version'),
-              'test_targets': len(rows),
-              'full_xg_ready_targets': len(full_xg_ready),
-              'distributions': distributions,
-              'samples': samples,
-          }
-          print(json.dumps(diagnostic, ensure_ascii=False, indent=2, sort_keys=True))
+          result = {}
+          for fixture_id in (19453590, 19453588, 19453594):
+              payload = json.loads(Path(f'/tmp/audit-{fixture_id}.json').read_text())
+              result[str(fixture_id)] = summarize(payload)
+          print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
           PY
