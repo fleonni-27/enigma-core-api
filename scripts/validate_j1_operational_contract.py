@@ -14,6 +14,7 @@ WEB_START = "uvicorn app.main_v017:app --host 0.0.0.0 --port $PORT"
 CRON_START = "python -m app.j1_scheduler"
 WORKER_START = "python -m app.j1_claim_worker"
 CANONICAL_DOC = "docs/j1-operations-v1.md"
+WORKER_BOOTSTRAP_BLUEPRINT = "render.worker.yaml"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -27,11 +28,11 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _service_by_name(config: dict[str, Any], name: str) -> dict[str, Any]:
+def _service_by_name(config: dict[str, Any], name: str, *, source: str = "render.yaml") -> dict[str, Any]:
     services = config.get("services") or []
-    _require(isinstance(services, list), "render.yaml services must be a list")
+    _require(isinstance(services, list), f"{source} services must be a list")
     matches = [service for service in services if service.get("name") == name]
-    _require(len(matches) == 1, f"render.yaml must define exactly one {name}")
+    _require(len(matches) == 1, f"{source} must define exactly one {name}")
     return matches[0]
 
 
@@ -89,6 +90,41 @@ def validate_render_contract() -> None:
     _require_secret_ref(worker, "SPORTMONKS_API_TOKEN")
 
 
+def validate_worker_bootstrap_contract() -> None:
+    canonical_config = _load_yaml(ROOT / "render.yaml")
+    bootstrap_config = _load_yaml(ROOT / WORKER_BOOTSTRAP_BLUEPRINT)
+    canonical = _service_by_name(canonical_config, WORKER_NAME)
+    bootstrap = _service_by_name(
+        bootstrap_config,
+        WORKER_NAME,
+        source=WORKER_BOOTSTRAP_BLUEPRINT,
+    )
+    services = bootstrap_config.get("services") or []
+    _require(len(services) == 1, f"{WORKER_BOOTSTRAP_BLUEPRINT} must provision only the missing worker")
+
+    for key in (
+        "type",
+        "runtime",
+        "region",
+        "branch",
+        "plan",
+        "numInstances",
+        "maxShutdownDelaySeconds",
+        "buildCommand",
+        "startCommand",
+    ):
+        _require(
+            bootstrap.get(key) == canonical.get(key),
+            f"{WORKER_BOOTSTRAP_BLUEPRINT} {key} must match canonical render.yaml worker",
+        )
+    _require(
+        _env_by_key(bootstrap) == _env_by_key(canonical),
+        f"{WORKER_BOOTSTRAP_BLUEPRINT} envVars must match canonical render.yaml worker",
+    )
+    _require_secret_ref(bootstrap, "DATABASE_URL")
+    _require_secret_ref(bootstrap, "SPORTMONKS_API_TOKEN")
+
+
 def validate_entrypoint_contract() -> None:
     _require((ROOT / "app/j1_scheduler.py").exists(), "canonical cron entrypoint is missing")
     _require((ROOT / "app/j1_work_producer.py").exists(), "canonical producer implementation is missing")
@@ -106,6 +142,7 @@ def validate_docs_contract() -> None:
             "J1_EXECUTION_MODE=producer",
             "app.j1_work_producer",
             "GET /operations/j1-work/status",
+            WORKER_BOOTSTRAP_BLUEPRINT,
         ],
     )
     _require_text("README.md", [CANONICAL_DOC, CRON_START, WORKER_START])
@@ -123,12 +160,14 @@ def validate_ci_contract() -> None:
             '"scripts/**"',
             '"docs/**"',
             '"tests/**"',
+            '"render*.yaml"',
         ],
     )
 
 
 def main() -> None:
     validate_render_contract()
+    validate_worker_bootstrap_contract()
     validate_entrypoint_contract()
     validate_docs_contract()
     validate_ci_contract()
