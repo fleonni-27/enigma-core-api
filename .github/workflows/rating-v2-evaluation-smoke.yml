@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=100'
+          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=500'
           started=$(date +%s)
           http_code=$(curl --silent --show-error --location \
             --connect-timeout 30 \
