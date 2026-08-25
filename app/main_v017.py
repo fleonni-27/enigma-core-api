@@ -18,7 +18,7 @@ from app.xg_backfill_startup import install_xg_backfill_startup
 
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
-app.version = "0.54.0"
+app.version = "0.53.0"
 install_evaluation_v1_xg_chronology_fix()
 app.include_router(enigma_rating_router)
 app.include_router(enigma_rating_v2_router)
