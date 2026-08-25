@@ -181,7 +181,7 @@ class EnigmaRatingV2EvaluationContractTests(unittest.TestCase):
         evaluation_source = Path("app/enigma_rating_v2_evaluation.py").read_text(encoding="utf-8")
         main_source = Path("app/main_v017.py").read_text(encoding="utf-8")
         self.assertIn('@router.get("/evaluation-v1")', evaluation_source)
-        self.assertIn('app.version = "0.52.0"', main_source)
+        self.assertIn('app.version = "0.53.0"', main_source)
         self.assertIn("from app.enigma_rating_v2_evaluation import router as enigma_rating_v2_evaluation_router", main_source)
         self.assertIn("app.include_router(enigma_rating_v2_evaluation_router)", main_source)
         self.assertIn('"same_timestamp_results_never_feed_other_same_timestamp_targets": True', evaluation_source)
