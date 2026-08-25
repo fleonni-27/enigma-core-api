@@ -4,8 +4,10 @@ on:
   workflow_dispatch:
   schedule:
     # America/Sao_Paulo is UTC-3.
-    # 02:40 UTC = 23:40 previous local day: preload D+1.
+    # 02:40 UTC = 23:40 previous local day: primary preload D+1.
     - cron: "40 2 * * *"
+    # 02:50 UTC = 23:50 previous local day: safety retry for D+1.
+    - cron: "50 2 * * *"
     # 03:00 UTC = 00:00 local: bootstrap current business day.
     - cron: "0 3 * * *"
     # 09:00 UTC = 06:00 local: morning refresh for current day.
@@ -39,6 +41,9 @@ jobs:
           if [ "${SCHEDULE:-}" = "40 2 * * *" ]; then
             target_date="$(TZ=America/Sao_Paulo date -d 'tomorrow' +%F)"
             phase="D1_PRELOAD_2340"
+          elif [ "${SCHEDULE:-}" = "50 2 * * *" ]; then
+            target_date="$(TZ=America/Sao_Paulo date -d 'tomorrow' +%F)"
+            phase="D1_RETRY_2350"
           elif [ "${SCHEDULE:-}" = "0 9 * * *" ]; then
             target_date="${local_today}"
             phase="DAY_REFRESH_0600"
