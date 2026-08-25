@@ -123,12 +123,28 @@ class PerformanceScaleV1Tests(unittest.TestCase):
                     )
                 )
 
+                elapsed = float(audit["prefetch_seconds"])
+                requests_per_second = (
+                    float(audit["request_count"]) / elapsed
+                    if elapsed > 0.0
+                    else None
+                )
+                print(
+                    "J1_LOAD_STAGE "
+                    f"fixtures={fixture_count} "
+                    f"requests={audit['request_count']} "
+                    f"concurrency={audit['concurrency']} "
+                    f"max_active={client.max_active} "
+                    f"prefetch_seconds={elapsed:.6f} "
+                    f"requests_per_second={requests_per_second:.2f}"
+                )
+
                 # The fake upstream sleeps 10 ms per request. A serial 20-fixture
                 # cycle would take about 400 ms for 40 requests; concurrency=4
                 # should keep the synthetic prefetch safely below 300 ms while
                 # leaving generous CI scheduling headroom.
                 if fixture_count == HARD_MAX_J1_FIXTURES:
-                    self.assertLess(audit["prefetch_seconds"], 0.30)
+                    self.assertLess(elapsed, 0.30)
 
     def test_j1_capacity_accepts_only_rollout_stages(self) -> None:
         for stage in J1_FIXTURE_STAGES:
