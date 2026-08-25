@@ -29,6 +29,53 @@ Operational/prediction layer:
 - three-instance Render worker Blueprint
 - fail-safe batch/producer execution gate
 
+Research/modeling layer:
+
+- Enigma Rating V1 transparent evidence score
+- Enigma Rating V2 research signal stack
+- independent Poisson 1X2
+- Dixon-Coles low-score correction
+- Elo + Davidson three-way probabilities
+- leakage-safe historical xG/xGA context
+- exact 10-match form context
+- explicit lineup/absence-impact contract with no guessed player values
+
+## Promoted model versus research signals
+
+The promoted prediction model remains `baseline_1x2_temporal_v1`:
+
+- multinomial logistic regression;
+- STANDARD family;
+- 36 model features;
+- default 5-match target-history lookback;
+- strict pre-target temporal cutoff;
+- no target-match lineup contribution;
+- no xG feature in the promoted STANDARD vector.
+
+Enigma Rating V2 does not silently replace this model. Poisson, Dixon-Coles, Elo, xG/xGA, form-10 and lineup impact are exposed as research signals so they can be evaluated against the current baseline with Brier, Log Loss, calibration and CLV before promotion.
+
+## Enigma Rating V2
+
+Canonical documentation: `docs/enigma-rating-v2.md`.
+
+V2 component budget:
+
+- model confidence: 15;
+- market edge: 15;
+- Poisson: 12;
+- Dixon-Coles: 12;
+- Elo: 10;
+- xG/xGA: 12;
+- exact form-10: 10;
+- lineup impact: 9;
+- home advantage: 5.
+
+Missing components are not imputed. Coverage is explicit and weights are renormalized only over observed/auditable evidence.
+
+`GET /rating/context-v2/{sportmonks_fixture_id}` builds research context automatically from historical database state strictly before the target kickoff. It derives goals, xG, xGA, exact 10-match form and same-league Elo without changing the STANDARD feature contract.
+
+J1 lineup snapshots are observable in the V2 context. Lineup presence is not treated as strength. Numeric absence impact is only accepted when an auditable player/expected-XI value model supplies retained-strength or absent-value inputs.
+
 ## Canonical J1 entrypoints
 
 The operational command contract is centralized in `docs/j1-operations-v1.md`.
@@ -92,20 +139,16 @@ Settlement V1 exists as an authenticated GitHub Actions workflow, but operationa
 
 ## CI and operational contract
 
-J1 CI now has two responsibilities:
-
-1. regression safety — compile, migration-chain validation and automatic discovery of all `tests/test_*.py` tests;
-2. architecture safety — `scripts/validate_j1_operational_contract.py` verifies Render service commands, worker count, secret refs, fail-safe mode, retired entrypoints and canonical documentation.
-
-The CI workflow is triggered by changes under application code, tests, migrations, scripts, docs, Render configuration and relevant GitHub workflows so new tests and operational drift cannot silently bypass the gate.
+CI automatically discovers all `tests/test_*.py` modules and validates compile, migration chain and the J1 operational contract. Enigma Rating V2 probability, xG/xGA, lineup and route tests therefore enter the same regression gate automatically.
 
 ## Current next milestones
 
-1. Materialize `enigma-j1-worker` in Render and confirm three healthy instances.
-2. Change only `J1_EXECUTION_MODE` from `batch` to `producer`.
-3. Validate the first real `producer -> enqueue -> claim -> completed` due-fixture cycle and immutable Prediction/Decision/Ledger persistence.
-4. Observe a meaningful multi-fixture horizontal cycle, ideally approaching the configured 20-fixture ceiling.
-5. Close Settlement V1 operationally and integrate it with the primary operations lifecycle without duplicating business logic.
+1. Establish an out-of-sample Rating V2 evaluation dataset and compute Brier/Log Loss/calibration for Poisson, Dixon-Coles and Elo individually versus `baseline_1x2_temporal_v1`.
+2. Add ablation analysis for xG/xGA and exact form-10 before choosing any ensemble/blend weights.
+3. Persist a trustworthy injury/suspension availability feed and design a learned/auditable player contribution model before activating lineup absence scores automatically.
+4. Fit Dixon-Coles rho and Elo hyperparameters only on training history with temporal validation.
+5. Materialize `enigma-j1-worker` in Render, confirm three healthy instances and complete the horizontal cutover.
+6. Close Settlement V1 operationally without duplicating business logic.
 
 ## Operational stack
 
@@ -114,6 +157,6 @@ The CI workflow is triggered by changes under application code, tests, migration
 - Deployment: Render web + cron; background-worker Blueprint prepared
 - Database: Supabase/PostgreSQL
 - Football data source: Sportmonks
-- Production API wrapper: `app.main_v017`, version `0.49.0`
+- Production API wrapper: `app.main_v017`, version `0.50.0`
 
-This document is the current engineering checkpoint. Operational command details belong in `docs/j1-operations-v1.md`; this file should summarize validated state and remaining closure work rather than duplicate runbooks.
+This document is the current engineering checkpoint. Operational command details belong in `docs/j1-operations-v1.md`; Rating V2 model details belong in `docs/enigma-rating-v2.md`.
