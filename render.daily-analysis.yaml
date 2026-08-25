@@ -7,10 +7,8 @@ services:
     autoDeployTrigger: commit
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.daily_analysis_report
-    # Temporary bootstrap cadence for operational validation. After the first
-    # successful automatic run, this file is returned to 30 4 * * * and the
-    # linked Blueprint auto-syncs the final daily schedule.
-    schedule: "*/5 * * * *"
+    # 04:30 UTC = 01:30 America/Sao_Paulo. The runner reports the previous business date.
+    schedule: "30 4 * * *"
     envVars:
       - key: APP_ENV
         value: production
