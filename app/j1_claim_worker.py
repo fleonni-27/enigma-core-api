@@ -7,7 +7,6 @@ import signal
 import socket
 from datetime import datetime, timezone
 from threading import Event, Thread
-from time import sleep
 from typing import Any
 
 from sqlalchemy import select
@@ -43,6 +42,7 @@ DEFAULT_POLL_SECONDS = 1.0
 
 TERMINAL_ITEM_STATUSES = {"completed", "already_recorded"}
 RETRYABLE_ITEM_STATUSES = {
+    "no_item_result",
     "inference_not_ready",
     "decision_not_ready",
     "inference_failed",
@@ -57,6 +57,14 @@ def _worker_id() -> str:
         or os.getenv("RENDER_INSTANCE_ID")
         or f"{socket.gethostname()}:{os.getpid()}"
     )[:160]
+
+
+def _claim_log_view(claim: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in claim.items()
+        if key != "claim_token"
+    }
 
 
 def _load_fixture(fixture_id: int) -> Fixture | None:
@@ -78,9 +86,13 @@ def _result_item_status(result: dict[str, Any]) -> str:
 def _classify_result(result: dict[str, Any]) -> tuple[bool, bool, str]:
     """Return (success, retryable, item_status)."""
 
-    if result.get("status") != "ok":
-        return False, True, str(result.get("status") or "runner_non_ok")
     item_status = _result_item_status(result)
+    if item_status == "fixture_missing":
+        return False, False, item_status
+    if result.get("status") != "ok":
+        return False, True, item_status if item_status != "no_item_result" else str(
+            result.get("status") or "runner_non_ok"
+        )
     if item_status in TERMINAL_ITEM_STATUSES:
         return True, False, item_status
     if item_status in RETRYABLE_ITEM_STATUSES:
@@ -186,6 +198,7 @@ async def process_one_claim(
     claim = claim_next_j1_work(worker_id=worker_id, lease_seconds=lease_seconds)
     if claim is None:
         return None
+    log_claim = _claim_log_view(claim)
 
     try:
         with _LeaseHeartbeat(claim, lease_seconds=lease_seconds):
@@ -200,7 +213,7 @@ async def process_one_claim(
             )
             return {
                 "status": "completed" if committed else "claim_lost",
-                "claim": claim,
+                "claim": log_claim,
                 "item_status": item_status,
                 "result": result,
             }
@@ -217,7 +230,7 @@ async def process_one_claim(
         )
         return {
             "status": (transition or {}).get("status") or "claim_lost",
-            "claim": claim,
+            "claim": log_claim,
             "item_status": item_status,
             "result": result,
         }
@@ -234,7 +247,7 @@ async def process_one_claim(
         )
         return {
             "status": (transition or {}).get("status") or "claim_lost",
-            "claim": claim,
+            "claim": log_claim,
             "item_status": "worker_exception",
             "error": exc.__class__.__name__,
         }
