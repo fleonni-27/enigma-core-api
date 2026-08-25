@@ -22,6 +22,7 @@ on:
       - "app/j1_scheduler.py"
       - "app/j1_scheduler_v2.py"
       - "app/j1_scheduler_routes.py"
+      - "app/j1_work_api.py"
       - "app/j1_work_producer.py"
       - "app/j1_work_queue.py"
       - "app/main_v015.py"
