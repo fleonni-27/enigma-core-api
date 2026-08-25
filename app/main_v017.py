@@ -12,6 +12,7 @@ from app.enigma_rating_v2_confirmation_holdout import (
     router as enigma_rating_v2_confirmation_holdout_router,
 )
 from app.enigma_rating_v2_confirmation_hook import install_confirmation_holdout_j1_hook
+from app.daily_operations_business_date_fix import install_daily_operations_business_date_fix
 from app.forward_test_report_v2 import router as forward_test_report_v2_router
 from app.forward_test_report_v3 import router as forward_test_report_v3_router
 from app.j1_work_api import router as j1_work_router
@@ -27,6 +28,7 @@ from app.xg_backfill_startup import install_xg_backfill_startup
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
 app.version = "0.53.0"
+install_daily_operations_business_date_fix()
 install_evaluation_v1_xg_chronology_fix()
 install_confirmation_holdout_j1_hook()
 install_confirmation_holdout_startup(app)
