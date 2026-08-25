@@ -1,4 +1,4 @@
-name: Evaluation V1 xG Live Audit
+name: Evaluation V1 Enlarged Cohort
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - ops/evaluation-v1-xg-live-audit
 
 jobs:
-  audit:
+  evaluate:
     runs-on: ubuntu-latest
     steps:
-      - name: Call production Evaluation V1
+      - name: Call production Evaluation V1 enlarged cohort
         run: |
           python - <<'PY'
           import json
@@ -18,38 +18,40 @@ jobs:
 
           base = "https://enigma-core-api.onrender.com"
           params = urllib.parse.urlencode({
-              "start_date": "2026-07-01",
+              "start_date": "2026-01-01",
               "end_date": "2026-08-24",
               "leagues": "Serie A",
-              "max_rows": 150,
-              "include_rows": "true",
+              "max_rows": 1000,
+              "include_rows": "false",
           })
           url = f"{base}/research/enigma-rating-v2/evaluation-v1?{params}"
-          with urllib.request.urlopen(url, timeout=180) as response:
+          with urllib.request.urlopen(url, timeout=240) as response:
               payload = json.load(response)
 
-          audit = payload.get("audit") or {}
-          test = ((payload.get("evaluation") or {}).get("test") or {})
-          models = test.get("models") or {}
+          evaluation = payload.get("evaluation") or {}
+          validation = evaluation.get("validation") or {}
+          test = evaluation.get("test") or {}
           summary = {
               "status": payload.get("status"),
               "version": payload.get("version"),
-              "audit": audit,
+              "date_range": payload.get("date_range"),
+              "parameters": payload.get("parameters"),
+              "baseline": payload.get("baseline"),
+              "audit": payload.get("audit"),
+              "validation_targets": validation.get("targets"),
+              "validation_models": validation.get("models"),
               "test_targets": test.get("targets"),
-              "poisson_xg": models.get("POISSON_XG_XGA"),
-              "dixon_coles_xg": models.get("DIXON_COLES_XG_XGA"),
+              "test_models": test.get("models"),
+              "paired_vs_standard": test.get("paired_vs_standard"),
+              "xg_xga_ablation": evaluation.get("test_xg_xga_ablation"),
+              "form10_diagnostic": evaluation.get("test_form10_diagnostic"),
+              "test_by_month": evaluation.get("test_by_month"),
           }
-          print("EVALUATION_V1_XG_LIVE_AUDIT=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          print("EVALUATION_V1_ENLARGED=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
           assert payload.get("status") == "ok"
-          assert audit.get("elo_warmup_days") == 1460
-          assert audit.get("xg_chronology_version") == "evaluation_v1_xg_chronology_v1"
-          assert audit.get("loader_version") == "evaluation_v1_streaming_loader_v1"
-          assert int(audit.get("fixture_page_size") or 0) <= 128
-          assert int(audit.get("max_fixture_page_rows") or 0) <= int(audit.get("fixture_page_size") or 0)
-          assert int(audit.get("max_latest_snapshots_in_page") or 0) <= int(audit.get("fixture_page_size") or 0)
-          assert int(audit.get("snapshots_with_nonempty_xg") or 0) > 0
-          assert int(audit.get("payloads_with_full_parsed_xg") or 0) > 0
-          assert int(audit.get("team_complete_xg_observations_appended") or 0) > 0
-          assert int(audit.get("targets_with_any_xg_history") or 0) > 0
+          assert (payload.get("audit") or {}).get("elo_warmup_days") == 1460
+          assert (payload.get("audit") or {}).get("loader_version") == "evaluation_v1_streaming_loader_v1"
+          assert int(test.get("targets") or 0) > 0
+          assert int(((test.get("models") or {}).get("STANDARD") or {}).get("sample_size") or 0) > 0
           PY
