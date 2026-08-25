@@ -23,21 +23,21 @@ class XGLiveSnapshotDiagnostic(unittest.TestCase):
                 "start_date": "2026-04-01",
                 "end_date": "2026-08-24",
                 "leagues": "Serie A",
-                "max_rows": 500,
-                "include_rows": "true",
+                "limit": 20,
             }
         )
-        evaluation = _get_json(f"{BASE}/research/enigma-rating-v2/evaluation-v1?{params}")
-        rows = [row for row in (evaluation.get("rows") or []) if row.get("partition") == "test"]
+        quality = _get_json(f"{BASE}/quality/batch?{params}")
+        rows = [
+            row for row in (quality.get("results") or [])
+            if row.get("snapshot_available") and row.get("xg_available") and row.get("statistics_available")
+        ]
         self.assertTrue(rows)
-
         print(
-            "XG_EVALUATION_AUDIT="
+            "XG_QUALITY_AUDIT="
             + json.dumps(
                 {
-                    "audit": evaluation.get("audit"),
-                    "test_size": len(rows),
-                    "first_test_fixture_ids": [row.get("sportmonks_fixture_id") for row in rows[:5]],
+                    "summary": quality.get("summary"),
+                    "fixture_ids": [row.get("sportmonks_fixture_id") for row in rows[:5]],
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -46,11 +46,9 @@ class XGLiveSnapshotDiagnostic(unittest.TestCase):
 
         for row in rows[:3]:
             fixture_id = int(row["sportmonks_fixture_id"])
-            audit_url = (
-                f"{BASE}/audit/fixture/{fixture_id}"
-                "?include_raw=true&sample_size=25"
+            payload = _get_json(
+                f"{BASE}/audit/fixture/{fixture_id}?include_raw=true&sample_size=25"
             )
-            payload = _get_json(audit_url)
             raw = payload.get("raw") or {}
             xg_rows = _as_list(raw.get("xg"))
             statistics = _as_list(raw.get("statistics"))
