@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.daily_operations import _fetch_daily_odds_payloads
 from app.daily_prediction_runner_v2 import _fetch_j1_upstream
+from app.j1_capacity import (
+    HARD_MAX_J1_FIXTURES,
+    J1_FIXTURE_STAGES,
+    J1_MAX_FIXTURES_ENV,
+    activate_j1_runner_capacity,
+    configured_j1_max_fixtures,
+)
 
 
 class _FakeSportmonksClient:
@@ -88,6 +97,83 @@ class PerformanceScaleV1Tests(unittest.TestCase):
         self.assertEqual(payloads[301]["enriched"]["status"], "ok")
         self.assertEqual(payloads[302]["enriched"]["status"], "upstream_failed")
         self.assertEqual(payloads[302]["odds"]["status"], "ok")
+
+    def test_j1_load_matrix_5_10_20_respects_global_concurrency(self) -> None:
+        for fixture_count in J1_FIXTURE_STAGES:
+            with self.subTest(fixture_count=fixture_count):
+                client = _FakeSportmonksClient()
+                fixtures = [
+                    SimpleNamespace(sportmonks_id=1000 + index)
+                    for index in range(fixture_count)
+                ]
+
+                payloads, audit = asyncio.run(
+                    _fetch_j1_upstream(client, fixtures, concurrency=4)
+                )
+
+                self.assertEqual(len(payloads), fixture_count)
+                self.assertEqual(audit["fixture_count"], fixture_count)
+                self.assertEqual(audit["request_count"], fixture_count * 2)
+                self.assertLessEqual(client.max_active, 4)
+                self.assertTrue(
+                    all(
+                        result[kind]["status"] == "ok"
+                        for result in payloads.values()
+                        for kind in ("enriched", "odds")
+                    )
+                )
+
+                elapsed = float(audit["prefetch_seconds"])
+                requests_per_second = (
+                    float(audit["request_count"]) / elapsed
+                    if elapsed > 0.0
+                    else None
+                )
+                print(
+                    "J1_LOAD_STAGE "
+                    f"fixtures={fixture_count} "
+                    f"requests={audit['request_count']} "
+                    f"concurrency={audit['concurrency']} "
+                    f"max_active={client.max_active} "
+                    f"prefetch_seconds={elapsed:.6f} "
+                    f"requests_per_second={requests_per_second:.2f}"
+                )
+
+                # The fake upstream sleeps 10 ms per request. A serial 20-fixture
+                # cycle would take about 400 ms for 40 requests; concurrency=4
+                # should keep the synthetic prefetch safely below 300 ms while
+                # leaving generous CI scheduling headroom.
+                if fixture_count == HARD_MAX_J1_FIXTURES:
+                    self.assertLess(elapsed, 0.30)
+
+    def test_j1_capacity_accepts_only_rollout_stages(self) -> None:
+        for stage in J1_FIXTURE_STAGES:
+            with self.subTest(stage=stage), patch.dict(
+                os.environ,
+                {J1_MAX_FIXTURES_ENV: str(stage)},
+            ):
+                self.assertEqual(configured_j1_max_fixtures(), stage)
+
+        for invalid in (0, 7, 21, 100):
+            with self.subTest(invalid=invalid), patch.dict(
+                os.environ,
+                {J1_MAX_FIXTURES_ENV: str(invalid)},
+            ):
+                with self.assertRaises(ValueError):
+                    configured_j1_max_fixtures()
+
+    def test_j1_capacity_activation_raises_only_hard_ceiling(self) -> None:
+        from app import daily_prediction_runner_v2 as runner_module
+
+        original_hard_max = runner_module.MAX_FIXTURES_PER_RUN
+        try:
+            with patch.dict(os.environ, {J1_MAX_FIXTURES_ENV: "10"}):
+                audit = activate_j1_runner_capacity()
+                self.assertEqual(audit["configured_max_fixtures"], 10)
+                self.assertEqual(audit["hard_max_fixtures"], 20)
+                self.assertEqual(runner_module.MAX_FIXTURES_PER_RUN, 20)
+        finally:
+            runner_module.MAX_FIXTURES_PER_RUN = original_hard_max
 
 
 if __name__ == "__main__":

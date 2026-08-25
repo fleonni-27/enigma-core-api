@@ -20,6 +20,7 @@ from app.daily_prediction_runner_v2 import (
     J1_TARGET_LEAD_MINUTES,
     run_daily_prediction_runner,
 )
+from app.j1_capacity import activate_j1_runner_capacity, configured_j1_max_fixtures
 from app.j1_pending_selector_v2 import (
     J1_PENDING_SELECTOR_VERSION,
     install_j1_pending_selector_v2,
@@ -161,6 +162,12 @@ async def run_j1_cycle(
     """
 
     cycle_started = perf_counter()
+    capacity = activate_j1_runner_capacity()
+    configured_max = int(capacity["configured_max_fixtures"])
+    if max_fixtures > configured_max:
+        raise ValueError(
+            f"max_fixtures={max_fixtures} exceeds configured J1 operational cap {configured_max}"
+        )
 
     install_j1_pending_selector_v2()
     install_prediction_window_policy()
@@ -197,6 +204,7 @@ async def run_j1_cycle(
                     "run_id": run_id,
                     "lock_acquired": False,
                     "reason": "J1_RUNNER_ALREADY_ACTIVE",
+                    "fixture_capacity": capacity,
                     "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
                     "prediction_window_policy_version": PREDICTION_WINDOW_POLICY_VERSION,
                 },
@@ -245,6 +253,7 @@ async def run_j1_cycle(
             "run_id": run_id,
             "lock_acquired": True,
             "status": scheduler_status,
+            "fixture_capacity": capacity,
             "pending_selector_version": J1_PENDING_SELECTOR_VERSION,
             "prediction_window_policy_version": PREDICTION_WINDOW_POLICY_VERSION,
         }
@@ -280,7 +289,7 @@ async def run_primary_operations_cycle() -> dict[str, Any]:
     result = await run_j1_cycle(
         source="render_cron",
         max_lateness_minutes=DEFAULT_MAX_LATENESS_MINUTES,
-        max_fixtures=DEFAULT_MAX_FIXTURES,
+        max_fixtures=configured_j1_max_fixtures(),
     )
 
     # Render's existing cron still invokes `python -m app.j1_scheduler` even

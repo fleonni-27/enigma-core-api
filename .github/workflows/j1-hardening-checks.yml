@@ -16,6 +16,7 @@ on:
       - "app/inference_runtime_v2.py"
       - "app/inference_fit_cache.py"
       - "app/internal_endpoint_auth.py"
+      - "app/j1_capacity.py"
       - "app/j1_pending_selector_v2.py"
       - "app/j1_scheduler.py"
       - "app/j1_scheduler_v2.py"
