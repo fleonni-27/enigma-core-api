@@ -4,16 +4,22 @@ on:
   push:
     branches:
       - ops/rating-v2-evaluation-smoke
+    paths:
+      - .github/workflows/rating-v2-evaluation-smoke.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/rating-v2-evaluation-smoke
+
       - name: Audit persisted snapshot evidence
         shell: bash
         run: |
@@ -33,41 +39,53 @@ jobs:
             fi
           done
 
-      - name: Print compact snapshot xG audit
+      - name: Build compact snapshot xG audit
         shell: bash
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
-          def summarize(payload):
-              snapshots = payload.get('snapshots') or []
-              rows = []
-              for snap in snapshots:
-                  xg = snap.get('xg')
-                  stats = snap.get('statistics')
-                  rows.append({
-                      'snapshot_id': snap.get('id') or snap.get('snapshot_id'),
-                      'fetched_at': snap.get('fetched_at'),
-                      'source': snap.get('source'),
-                      'statistics_count': len(stats) if isinstance(stats, list) else (1 if stats else 0),
-                      'xg_count': len(xg) if isinstance(xg, list) else (1 if xg else 0),
-                      'xg_type_names': sorted({
-                          str(((r.get('type') or {}).get('name') or (r.get('type') or {}).get('developer_name') or r.get('type_id')))
-                          for r in (xg or []) if isinstance(r, dict)
-                      }) if isinstance(xg, list) else [],
-                      'xg_sample': (xg or [])[:2] if isinstance(xg, list) else xg,
-                  })
-              return {
-                  'status': payload.get('status'),
-                  'fixture': payload.get('fixture'),
-                  'snapshot_count': len(snapshots),
-                  'snapshots': rows,
-              }
-
           result = {}
           for fixture_id in (19453590, 19453588, 19453594):
               payload = json.loads(Path(f'/tmp/audit-{fixture_id}.json').read_text())
-              result[str(fixture_id)] = summarize(payload)
+              raw = payload.get('raw') or {}
+              xg = raw.get('xg')
+              stats = raw.get('statistics')
+              xg_rows = xg if isinstance(xg, list) else ([xg] if xg else [])
+              stat_rows = stats if isinstance(stats, list) else ([stats] if stats else [])
+              result[str(fixture_id)] = {
+                  'status': payload.get('status'),
+                  'fixture': payload.get('fixture'),
+                  'snapshot': payload.get('snapshot'),
+                  'counts': payload.get('counts'),
+                  'missing_sections': (payload.get('quality') or {}).get('missing_sections'),
+                  'statistics_count_from_raw': len(stat_rows),
+                  'xg_count_from_raw': len(xg_rows),
+                  'xg_type_names': sorted({
+                      str(((r.get('type') or {}).get('name') or (r.get('type') or {}).get('developer_name') or r.get('type_id')))
+                      for r in xg_rows if isinstance(r, dict)
+                  }),
+                  'xg_sample': xg_rows[:3],
+              }
+
+          Path('ops/rating-v2-evaluation-diagnostic.json').parent.mkdir(parents=True, exist_ok=True)
+          Path('ops/rating-v2-evaluation-diagnostic.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + '\n'
+          )
           print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
           PY
+
+      - name: Persist diagnostic on ops branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ops/rating-v2-evaluation-diagnostic.json
+          if git diff --cached --quiet; then
+            echo 'Diagnostic unchanged.'
+            exit 0
+          fi
+          git commit -m 'Record Rating V2 xG persistence diagnostic'
+          git push origin HEAD:ops/rating-v2-evaluation-smoke
