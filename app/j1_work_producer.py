@@ -78,10 +78,6 @@ async def run_producer_cycle() -> dict:
         status = queue_status(now=now)
 
         try:
-            odds_window_clv = await run_odds_window_clv_cycle(now=now)
-        except TypeError:
-            # Compatibility with the current function signature if `now` is not
-            # accepted by an older deployed odds-window module.
             odds_window_clv = await run_odds_window_clv_cycle()
         except Exception as exc:
             odds_window_clv = {
