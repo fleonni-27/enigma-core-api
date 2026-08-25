@@ -9,7 +9,7 @@ from sqlalchemy import and_, func, or_, select
 
 import app.enigma_rating_v2_evaluation as evaluation
 from app.database import SessionLocal
-from app.league_registry import TARGET_LEAGUES, canonical_league
+from app.league_registry import canonical_league
 from app.models import Fixture, FixtureDataSnapshot
 
 EVALUATION_XG_CHRONOLOGY_VERSION = "evaluation_v1_xg_chronology_v1"
@@ -56,23 +56,11 @@ def _append_observation(
     return True
 
 
-def _requested_league_names(requested_league_keys: set[str]) -> list[str]:
-    names: set[str] = set()
-    for key in requested_league_keys:
-        item = TARGET_LEAGUES.get(key)
-        if not item:
-            continue
-        names.add(str(item["canonical_name"]))
-        names.update(str(alias) for alias in item.get("aliases") or [])
-    return sorted(names)
-
-
 def _fixture_page(
     session,
     *,
     warmup_start: datetime,
     latest_target: datetime,
-    league_names: list[str],
     cursor_starts_at: datetime | None,
     cursor_fixture_id: int | None,
     limit: int = FIXTURE_PAGE_SIZE,
@@ -87,8 +75,6 @@ def _fixture_page(
         Fixture.starts_at >= warmup_start,
         Fixture.starts_at <= latest_target,
     )
-    if league_names:
-        stmt = stmt.where(Fixture.league_name.in_(league_names))
     if cursor_starts_at is not None and cursor_fixture_id is not None:
         stmt = stmt.where(
             or_(
@@ -189,7 +175,6 @@ def _evaluate_challengers_chronologically(
         for row in targets
         if canonical_league(str(row.get("league") or "")).get("key")
     }
-    requested_league_names = _requested_league_names(requested_league_keys)
 
     rate_histories: dict[tuple[str, str], deque[dict[str, Any]]] = defaultdict(
         lambda: deque(maxlen=RATE_HISTORY_MAX_MATCHES)
@@ -375,7 +360,6 @@ def _evaluate_challengers_chronologically(
                 session,
                 warmup_start=warmup_start,
                 latest_target=latest_target,
-                league_names=requested_league_names,
                 cursor_starts_at=cursor_starts_at,
                 cursor_fixture_id=cursor_fixture_id,
                 limit=FIXTURE_PAGE_SIZE,
@@ -390,7 +374,15 @@ def _evaluate_challengers_chronologically(
                 len(page),
             )
 
-            fixture_ids = [int(row.id) for row in page]
+            eligible_page = [
+                row
+                for row in page
+                if canonical_league(row.league_name).get("key")
+                in requested_league_keys
+            ]
+            audit_counts["eligible_fixtures_scanned"] += len(eligible_page)
+
+            fixture_ids = [int(row.id) for row in eligible_page]
             snapshot_map = _latest_snapshot_payloads(session, fixture_ids)
             audit_counts["snapshots_loaded"] += len(snapshot_map)
             audit_counts["max_latest_snapshots_in_page"] = max(
@@ -398,7 +390,7 @@ def _evaluate_challengers_chronologically(
                 len(snapshot_map),
             )
 
-            for row in page:
+            for row in eligible_page:
                 fixture = SimpleNamespace(
                     id=int(row.id),
                     league_name=row.league_name,
@@ -474,6 +466,9 @@ def _evaluate_challengers_chronologically(
         "audit": {
             "fixtures_scanned": int(audit_counts["fixtures_scanned"]),
             "fixture_pages": int(audit_counts["fixture_pages"]),
+            "eligible_fixtures_scanned": int(
+                audit_counts["eligible_fixtures_scanned"]
+            ),
             "fixture_page_size": FIXTURE_PAGE_SIZE,
             "max_fixture_page_rows": int(audit_counts["max_fixture_page_rows"]),
             "snapshots_loaded": int(audit_counts["snapshots_loaded"]),
@@ -524,7 +519,7 @@ def _evaluate_challengers_chronologically(
             "loader_version": EVALUATION_LOADER_VERSION,
             "loader_policy": {
                 "fixture_scan": "keyset paginated chronological SQL",
-                "league_filter_applied_in_sql": True,
+                "league_canonicalization_before_snapshot_json_load": True,
                 "latest_snapshot_only_per_fixture_page": True,
                 "lineups_not_loaded": True,
                 "older_snapshots_not_materialized": True,
