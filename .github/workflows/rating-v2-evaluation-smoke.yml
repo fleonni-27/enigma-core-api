@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=500'
+          url='https://enigma-core-api.onrender.com/research/enigma-rating-v2/evaluation-v1?start_date=2026-04-01&end_date=2026-08-24&leagues=Serie%20A&max_rows=500&include_rows=true'
           started=$(date +%s)
           http_code=$(curl --silent --show-error --location \
             --connect-timeout 30 \
@@ -34,43 +34,52 @@ jobs:
             exit 1
           fi
 
-      - name: Print compact evaluation evidence
+      - name: Print xG evidence diagnostics
         shell: bash
         run: |
           python - <<'PY'
           import json
+          from collections import Counter
           from pathlib import Path
 
           p = json.loads(Path('/tmp/evaluation.json').read_text())
-          test = (p.get('evaluation') or {}).get('test') or {}
-          validation = (p.get('evaluation') or {}).get('validation') or {}
-          models = test.get('models') or {}
-          compact = {
+          rows = [r for r in (p.get('rows') or []) if r.get('partition') == 'test']
+          keys = [
+              'home_history_matches',
+              'away_history_matches',
+              'home_xg_for_history_matches',
+              'home_xg_against_history_matches',
+              'away_xg_for_history_matches',
+              'away_xg_against_history_matches',
+          ]
+
+          distributions = {
+              key: dict(sorted(Counter(int((r.get('context_audit') or {}).get(key) or 0) for r in rows).items()))
+              for key in keys
+          }
+          full_xg_ready = [
+              r for r in rows
+              if all(int((r.get('context_audit') or {}).get(key) or 0) >= 3 for key in keys[2:])
+          ]
+          samples = []
+          for r in rows[:10]:
+              audit = r.get('context_audit') or {}
+              samples.append({
+                  'sportmonks_fixture_id': r.get('sportmonks_fixture_id'),
+                  'starts_at': r.get('starts_at'),
+                  'home_team': r.get('home_team'),
+                  'away_team': r.get('away_team'),
+                  'xg_counts': {key: audit.get(key) for key in keys[2:]},
+                  'history_counts': {key: audit.get(key) for key in keys[:2]},
+              })
+
+          diagnostic = {
               'status': p.get('status'),
               'version': p.get('version'),
-              'baseline': p.get('baseline'),
-              'audit': p.get('audit'),
-              'validation_targets': validation.get('targets'),
-              'test_targets': test.get('targets'),
-              'test_models': {
-                  name: {
-                      'sample_size': metric.get('sample_size'),
-                      'coverage_pct': metric.get('coverage_pct'),
-                      'brier_multiclass': metric.get('brier_multiclass'),
-                      'log_loss': metric.get('log_loss'),
-                      'accuracy': metric.get('accuracy'),
-                      'average_probability_actual': metric.get('average_probability_actual'),
-                      'ece_pp': (metric.get('predicted_class_calibration') or {}).get('ece_pp'),
-                  }
-                  for name, metric in models.items()
-              },
-              'paired_vs_standard': test.get('paired_vs_standard'),
-              'xg_xga_ablation': (p.get('evaluation') or {}).get('test_xg_xga_ablation'),
-              'form10_diagnostic': {
-                  'eligible_targets': ((p.get('evaluation') or {}).get('test_form10_diagnostic') or {}).get('eligible_targets'),
-                  'coverage_pct': ((p.get('evaluation') or {}).get('test_form10_diagnostic') or {}).get('coverage_pct'),
-              },
-              'policy': p.get('policy'),
+              'test_targets': len(rows),
+              'full_xg_ready_targets': len(full_xg_ready),
+              'distributions': distributions,
+              'samples': samples,
           }
-          print(json.dumps(compact, ensure_ascii=False, indent=2, sort_keys=True))
+          print(json.dumps(diagnostic, ensure_ascii=False, indent=2, sort_keys=True))
           PY
