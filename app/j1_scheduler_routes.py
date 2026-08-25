@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from app import daily_prediction_runner_v2 as runner_module
+from app.j1_capacity import HARD_MAX_J1_FIXTURES
 from app.j1_pending_selector_v2 import install_j1_pending_selector_v2
 
 _installed = False
@@ -19,7 +20,7 @@ async def _scheduled_daily_prediction_runner_endpoint(
     max_fixtures: int = Query(
         default=runner_module.DEFAULT_MAX_FIXTURES,
         ge=1,
-        le=runner_module.MAX_FIXTURES_PER_RUN,
+        le=HARD_MAX_J1_FIXTURES,
     ),
 ) -> dict[str, Any]:
     try:
