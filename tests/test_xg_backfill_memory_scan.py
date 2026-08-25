@@ -1,6 +1,7 @@
 from pathlib import Path
 import unittest
 
+from app.xg_backfill_bounded_v2 import CHUNK_SIZE
 from app.xg_backfill_memory_scan import _league_aliases
 
 
@@ -12,13 +13,18 @@ class XGBackfillMemoryScanTests(unittest.TestCase):
         self.assertNotIn("Serie B", aliases)
         self.assertNotIn("La Liga", aliases)
 
-    def test_scanner_uses_correlated_latest_snapshot_and_sql_league_filter(self):
-        source = Path("app/xg_backfill_memory_scan.py").read_text(encoding="utf-8")
+    def test_bounded_runner_filters_and_limits_before_materializing_payloads(self):
+        source = Path("app/xg_backfill_bounded_v2.py").read_text(encoding="utf-8")
         startup = Path("app/xg_backfill_startup.py").read_text(encoding="utf-8")
         self.assertIn("Fixture.league_name.in_(aliases)", source)
         self.assertIn("scalar_subquery()", source)
-        self.assertNotIn("fixture_ids =", source)
-        self.assertIn("_latest_snapshot_rows = latest_snapshot_rows_memory_bounded", startup)
+        self.assertIn(".limit(limit)", source)
+        self.assertIn("select(\n                Fixture.id,", source)
+        self.assertNotIn("FixtureDataSnapshot.statistics,", source)
+        self.assertNotIn("FixtureDataSnapshot.xg,", source)
+        self.assertEqual(CHUNK_SIZE, 12)
+        self.assertIn("backfill_missing_xg = backfill_missing_xg_bounded", startup)
+        self.assertIn("xg_gap_status = gap_status_sql", startup)
 
 
 if __name__ == "__main__":
