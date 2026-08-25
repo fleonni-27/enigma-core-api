@@ -368,7 +368,7 @@ def _evaluate_challengers_chronologically(
                 break
 
             audit_counts["fixture_pages"] += 1
-            audit_counts["fixtures_scanned"] += len(page)
+            audit_counts["fixture_metadata_rows_scanned"] += len(page)
             audit_counts["max_fixture_page_rows"] = max(
                 audit_counts["max_fixture_page_rows"],
                 len(page),
@@ -464,11 +464,11 @@ def _evaluate_challengers_chronologically(
     return {
         "rows": rows,
         "audit": {
-            "fixtures_scanned": int(audit_counts["fixtures_scanned"]),
-            "fixture_pages": int(audit_counts["fixture_pages"]),
-            "eligible_fixtures_scanned": int(
-                audit_counts["eligible_fixtures_scanned"]
+            "fixtures_scanned": int(audit_counts["eligible_fixtures_scanned"]),
+            "fixture_metadata_rows_scanned": int(
+                audit_counts["fixture_metadata_rows_scanned"]
             ),
+            "fixture_pages": int(audit_counts["fixture_pages"]),
             "fixture_page_size": FIXTURE_PAGE_SIZE,
             "max_fixture_page_rows": int(audit_counts["max_fixture_page_rows"]),
             "snapshots_loaded": int(audit_counts["snapshots_loaded"]),
