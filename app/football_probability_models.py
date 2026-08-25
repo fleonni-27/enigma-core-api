@@ -90,6 +90,8 @@ def dixon_coles_1x2(
 ) -> dict[str, Any]:
     if rho < -0.30 or rho > 0.30:
         raise ValueError("rho must be between -0.30 and 0.30")
+    if max_goals < 5 or max_goals > 20:
+        raise ValueError("max_goals must be between 5 and 20")
     home_lambda = _clip(expected_home_goals, 0.05, 6.0)
     away_lambda = _clip(expected_away_goals, 0.05, 6.0)
     grid: list[list[float]] = []
