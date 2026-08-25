@@ -7,7 +7,12 @@ from datetime import date
 
 from fastapi import FastAPI
 
-from app.xg_historical_backfill import backfill_missing_xg
+from app import xg_historical_backfill
+from app.xg_backfill_memory_scan import latest_snapshot_rows_memory_bounded
+
+# Replace only the scanner implementation. The public/status/run contracts and
+# append-only persistence semantics remain in xg_historical_backfill_v1.
+xg_historical_backfill._latest_snapshot_rows = latest_snapshot_rows_memory_bounded
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
@@ -31,7 +36,7 @@ def _startup_config() -> dict:
 async def _run_startup_backfill() -> None:
     try:
         config = _startup_config()
-        result = await backfill_missing_xg(**config)
+        result = await xg_historical_backfill.backfill_missing_xg(**config)
         logger.warning(
             "xg_historical_backfill_summary status=%s window=%s..%s leagues=%s selected=%s "
             "created=%s upstream_unavailable=%s upstream_failed=%s persistence_failed=%s remaining=%s requests=%s retries=%s",
