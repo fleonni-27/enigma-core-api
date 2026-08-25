@@ -1,6 +1,6 @@
 # Enigma Core API
 
-Backend da Enigma Core para ingestão de dados de futebol, inferência pré-jogo, decisão auditável, forward test, CLV e observabilidade operacional.
+Backend da Enigma Core para ingestão de dados de futebol, inferência pré-jogo, decisão auditável, forward test, CLV, rating research e observabilidade operacional.
 
 ## Produção
 
@@ -10,7 +10,7 @@ Backend da Enigma Core para ingestão de dados de futebol, inferência pré-jogo
 - Banco: PostgreSQL / Supabase
 - Fonte de dados: Sportmonks
 - Wrapper de produção: `app.main_v017`
-- Versão atual: **0.49.0**
+- Versão atual: **0.50.0**
 
 ## Arquitetura operacional atual
 
@@ -42,6 +42,22 @@ Implementado no código e no Blueprint:
 
 O cutover operacional só é considerado concluído depois que o serviço real `enigma-j1-worker` existir no Render com três instâncias saudáveis e o cron for alterado de `batch` para `producer`.
 
+## Enigma Rating V2
+
+`enigma_rating_v2_research_v1` adiciona uma camada research-only com sinais explícitos de:
+
+- Poisson 1X2;
+- Dixon-Coles para placares baixos;
+- Elo + Davidson para empate;
+- xG e xGA históricos;
+- forma exata de 10 jogos;
+- impacto de lineup/desfalques somente quando houver valor auditável do XI/ausências;
+- confiança calibrada e edge de mercado.
+
+`GET /rating/context-v2/{sportmonks_fixture_id}` deriva automaticamente gols, xG/xGA, forma-10 e Elo usando somente dados anteriores ao kickoff da fixture. O contexto de lineup expõe o XI observado, mas não inventa valor para jogadores ausentes.
+
+O Rating V2 **não substitui** o modelo promovido. `baseline_1x2_temporal_v1`, as 36 features STANDARD e os thresholds do Decision Engine permanecem inalterados até validação temporal por Brier, Log Loss, calibração e CLV.
+
 ## Forward Test e CLV
 
 A API expõe Forward-Test Report V2/V3, métricas de qualidade probabilística, calibração, ROI diagnóstico e cobertura/distribuição de CLV. O sistema permanece **research-only** e não executa apostas reais automaticamente.
@@ -51,6 +67,7 @@ A API expõe Forward-Test Report V2/V3, métricas de qualidade probabilística, 
 Referências principais:
 
 - `docs/j1-operations-v1.md` — contrato operacional canônico de J1, entrypoints, Render, cutover e rollback;
+- `docs/enigma-rating-v2.md` — Poisson, Dixon-Coles, Elo, xG/xGA, forma-10, lineup e política de promoção da V2;
 - `docs/daily-prediction-runner-v1.md` — semântica do fluxo Prediction/Decision/Ledger em J1;
 - `docs/performance-scale-v1.md` — pooling, concorrência, capacidade 5/10/20 e Horizontal V1;
 - `docs/forward-test-report-v3.md` — qualidade probabilística, calibração e CLV;
