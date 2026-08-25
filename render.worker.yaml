@@ -1,0 +1,37 @@
+services:
+  - type: worker
+    name: enigma-j1-worker
+    runtime: python
+    region: virginia
+    branch: main
+    autoDeployTrigger: commit
+    plan: starter
+    numInstances: 3
+    maxShutdownDelaySeconds: 300
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.j1_claim_worker
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: DATABASE_URL
+      - key: SPORTMONKS_API_TOKEN
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: SPORTMONKS_API_TOKEN
+      - key: SPORTMONKS_BASE_URL
+        value: https://api.sportmonks.com/v3/football
+      - key: J1_MAX_FIXTURES
+        value: "20"
+      - key: J1_WORKER_POLL_SECONDS
+        value: "0.5"
+      - key: J1_WORKER_LEASE_SECONDS
+        value: "180"
+      - key: J1_WORKER_RETRY_DELAY_SECONDS
+        value: "15"
+      - key: J1_WORKER_MAX_ATTEMPTS
+        value: "5"
