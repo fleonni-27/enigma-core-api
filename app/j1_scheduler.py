@@ -3,15 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from time import perf_counter
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import BigInteger, DateTime, Identity, Integer, String, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.daily_operations import BUSINESS_TIMEZONE, run_daily_sync
 from app.database import Base, SessionLocal, engine
 from app.daily_prediction_runner_v2 import (
     DAILY_PREDICTION_RUNNER_VERSION,
@@ -47,6 +49,9 @@ J1_EXECUTION_MODE_ENV = "J1_EXECUTION_MODE"
 J1_EXECUTION_MODE_BATCH = "batch"
 J1_EXECUTION_MODE_PRODUCER = "producer"
 VALID_J1_EXECUTION_MODES = {J1_EXECUTION_MODE_BATCH, J1_EXECUTION_MODE_PRODUCER}
+FIXTURE_COVERAGE_OPERATION_NAME = "DAILY_FIXTURE_COVERAGE_SYNC"
+FIXTURE_COVERAGE_ADVISORY_LOCK_KEY = 450027
+FIXTURE_COVERAGE_INTERVAL_MINUTES = 15
 
 _schema_lock = Lock()
 _schema_ready = False
@@ -82,12 +87,12 @@ def ensure_operation_run_schema() -> None:
         _schema_ready = True
 
 
-def _start_run(source: str) -> int:
+def _start_run(source: str, *, operation: str = J1_OPERATION_NAME) -> int:
     ensure_operation_run_schema()
     now = datetime.now(timezone.utc)
     with SessionLocal() as session:
         row = OperationRunRecord(
-            operation=J1_OPERATION_NAME,
+            operation=operation,
             source=source,
             status="RUNNING",
             started_at=now,
@@ -143,6 +148,123 @@ def configured_j1_execution_mode() -> str:
             f"{J1_EXECUTION_MODE_ENV} must be one of {sorted(VALID_J1_EXECUTION_MODES)}"
         )
     return mode
+
+
+def _latest_fixture_coverage_sync() -> OperationRunRecord | None:
+    ensure_operation_run_schema()
+    with SessionLocal() as session:
+        row = session.scalar(
+            select(OperationRunRecord)
+            .where(
+                OperationRunRecord.operation == FIXTURE_COVERAGE_OPERATION_NAME,
+                OperationRunRecord.status.in_(["OK", "DEGRADED"]),
+            )
+            .order_by(OperationRunRecord.started_at.desc(), OperationRunRecord.id.desc())
+            .limit(1)
+        )
+        if row is None:
+            return None
+        session.expunge(row)
+        return row
+
+
+async def maybe_run_fixture_coverage_sync() -> dict[str, Any]:
+    """Refresh today's fixture list without coupling odds/predictions to this cadence.
+
+    Render already wakes the J1 scheduler every minute. This lightweight guard uses
+    that reliable process as a fallback fixture-discovery source at most every 15
+    minutes. It fetches fixtures only (no broad odds refresh), so the official J1
+    odds/prediction/decision timing remains unchanged.
+    """
+
+    now = datetime.now(timezone.utc)
+    latest = _latest_fixture_coverage_sync()
+    if latest is not None and latest.started_at >= now - timedelta(minutes=FIXTURE_COVERAGE_INTERVAL_MINUTES):
+        return {
+            "status": "ok",
+            "action": "skipped_recent",
+            "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
+            "last_started_at": latest.started_at.isoformat(),
+        }
+
+    connection = engine.connect()
+    lock_acquired = False
+    run_id: int | None = None
+    try:
+        lock_acquired = bool(
+            connection.execute(
+                text("SELECT pg_try_advisory_lock(:key)"),
+                {"key": FIXTURE_COVERAGE_ADVISORY_LOCK_KEY},
+            ).scalar()
+        )
+        if not lock_acquired:
+            return {
+                "status": "ok",
+                "action": "skipped_locked",
+                "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
+            }
+
+        # Recheck after acquiring the lock so overlapping cron invocations cannot
+        # both refresh the same 15-minute coverage interval.
+        latest = _latest_fixture_coverage_sync()
+        now = datetime.now(timezone.utc)
+        if latest is not None and latest.started_at >= now - timedelta(minutes=FIXTURE_COVERAGE_INTERVAL_MINUTES):
+            return {
+                "status": "ok",
+                "action": "skipped_recent_after_lock",
+                "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
+                "last_started_at": latest.started_at.isoformat(),
+            }
+
+        run_id = _start_run("render_cron", operation=FIXTURE_COVERAGE_OPERATION_NAME)
+        target_date = datetime.now(ZoneInfo(BUSINESS_TIMEZONE)).date()
+        sync = await run_daily_sync(target_date=target_date, refresh_odds=False)
+        target_fixtures = int((sync.get("target_fixtures") or {}).get("count") or 0)
+        fixture_ingestion = sync.get("fixture_ingestion") or {}
+        sync_status = str(sync.get("status") or "unknown")
+        persisted_status = "OK" if sync_status == "ok" else "DEGRADED"
+        counts = {
+            "target_fixtures": target_fixtures,
+            "received": int(fixture_ingestion.get("received") or 0),
+            "created": int(fixture_ingestion.get("created") or 0),
+            "updated": int(fixture_ingestion.get("updated") or 0),
+            "skipped": int(fixture_ingestion.get("skipped") or 0),
+        }
+        _finish_run(
+            run_id,
+            status=persisted_status,
+            selected_fixtures=target_fixtures,
+            counts=counts,
+        )
+        return {
+            "status": sync_status,
+            "action": "refreshed",
+            "target_date": target_date.isoformat(),
+            "target_fixtures": target_fixtures,
+            "fixture_ingestion": fixture_ingestion,
+            "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
+            "run_id": run_id,
+            "odds_refresh_requested": False,
+        }
+    except Exception as exc:
+        if run_id is not None:
+            _finish_run(run_id, status="FAILED", error=exc.__class__.__name__)
+        return {
+            "status": "failed",
+            "action": "coverage_sync_failed",
+            "error": exc.__class__.__name__,
+            "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
+        }
+    finally:
+        if lock_acquired:
+            try:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:key)"),
+                    {"key": FIXTURE_COVERAGE_ADVISORY_LOCK_KEY},
+                )
+            except Exception:
+                pass
+        connection.close()
 
 
 def _scheduler_status_from_result(result: dict[str, Any]) -> tuple[str, str | None]:
@@ -300,11 +422,17 @@ async def run_j1_cycle(
 
 
 async def run_primary_operations_cycle() -> dict[str, Any]:
+    # Fixture coverage is refreshed before J1 selection so a same-day event that
+    # was absent from the scheduled Daily Operations Sync can still enter the
+    # official J1 pipeline before its -45 minute window.
+    fixture_coverage_sync = await maybe_run_fixture_coverage_sync()
+
     result = await run_j1_cycle(
         source="render_cron",
         max_lateness_minutes=DEFAULT_MAX_LATENESS_MINUTES,
         max_fixtures=configured_j1_max_fixtures(),
     )
+    result["fixture_coverage_sync"] = fixture_coverage_sync
 
     # Render's existing cron still invokes `python -m app.j1_scheduler` even
     # though render.yaml points at j1_scheduler_v2. Keep Closing/CLV active on

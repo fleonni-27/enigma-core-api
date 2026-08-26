@@ -5,11 +5,64 @@ import unicodedata
 
 
 TARGET_LEAGUES = {
-    "br_serie_a": {"canonical_name": "Serie A", "priority": 1, "aliases": ["Serie A", "Brazil Serie A", "Brasileirao Serie A", "Brasileirão Série A"]},
-    "br_serie_b": {"canonical_name": "Serie B", "priority": 1, "aliases": ["Serie B", "Brazil Serie B", "Brasileirao Serie B", "Brasileirão Série B"]},
-    "copa_do_brasil": {"canonical_name": "Copa do Brasil", "priority": 1, "aliases": ["Copa do Brasil"]},
-    "libertadores": {"canonical_name": "Copa Libertadores", "priority": 1, "aliases": ["Copa Libertadores", "Libertadores", "Libertadores da America", "Libertadores da América"]},
-    "sudamericana": {"canonical_name": "Copa Sudamericana", "priority": 1, "aliases": ["Copa Sudamericana", "Copa Sulamericana", "Sudamericana", "Sul-Americana", "Copa Sul-Americana"]},
+    "br_serie_a": {
+        "canonical_name": "Serie A",
+        "priority": 1,
+        "aliases": [
+            "Serie A",
+            "Brazil Serie A",
+            "Brasileirao Serie A",
+            "Brasileirão Série A",
+            "Brasileiro Serie A",
+            "Brazilian Serie A",
+        ],
+    },
+    "br_serie_b": {
+        "canonical_name": "Serie B",
+        "priority": 1,
+        "aliases": [
+            "Serie B",
+            "Brazil Serie B",
+            "Brasileirao Serie B",
+            "Brasileirão Série B",
+            "Brasileiro Serie B",
+            "Brazilian Serie B",
+        ],
+    },
+    "copa_do_brasil": {
+        "canonical_name": "Copa do Brasil",
+        "priority": 1,
+        "aliases": [
+            "Copa do Brasil",
+            "Brazil Copa do Brasil",
+            "Brazilian Cup",
+        ],
+    },
+    "libertadores": {
+        "canonical_name": "Copa Libertadores",
+        "priority": 1,
+        "aliases": [
+            "Copa Libertadores",
+            "Libertadores",
+            "Libertadores da America",
+            "Libertadores da América",
+            "CONMEBOL Libertadores",
+            "CONMEBOL Copa Libertadores",
+        ],
+    },
+    "sudamericana": {
+        "canonical_name": "Copa Sudamericana",
+        "priority": 1,
+        "aliases": [
+            "Copa Sudamericana",
+            "Copa Sulamericana",
+            "Sudamericana",
+            "Sul-Americana",
+            "Copa Sul-Americana",
+            "CONMEBOL Sudamericana",
+            "CONMEBOL Copa Sudamericana",
+        ],
+    },
     "premier_league": {"canonical_name": "Premier League", "priority": 1, "aliases": ["Premier League", "Premiere League"]},
     "la_liga": {"canonical_name": "La Liga", "priority": 1, "aliases": ["La Liga", "LaLiga"]},
     "champions_league": {"canonical_name": "Champions League", "priority": 1, "aliases": ["Champions League", "UEFA Champions League"]},
