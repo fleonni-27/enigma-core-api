@@ -16,14 +16,15 @@ if database_url.startswith("postgresql://"):
 elif database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
 
-# Supabase session-mode pool currently exposes a hard 15-client ceiling. The
-# Enigma deployment has multiple long-lived processes (web + J1 workers) plus
-# short-lived cron jobs; SQLAlchemy's defaults can exhaust that allowance. Keep
-# exactly one durable connection per process and queue short bursts locally.
+# Supabase session-mode pool currently exposes a hard 15-client ceiling. Enigma
+# processes sometimes need two concurrent DB sessions internally (for example a
+# long-lived advisory-lock connection plus a scoped ORM session in the same J1
+# cycle). Keep exactly two fixed connections per process and disallow overflow,
+# which preserves that internal concurrency without allowing unbounded bursts.
 engine = create_engine(
     database_url,
     pool_pre_ping=True,
-    pool_size=1,
+    pool_size=2,
     max_overflow=0,
     pool_timeout=15,
     pool_recycle=120,
