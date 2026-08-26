@@ -6,11 +6,11 @@ from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 
 from app.daily_operations import BUSINESS_TIMEZONE, run_daily_sync
 from app.daily_operations_business_date_fix import install_daily_operations_business_date_fix
-from app.database import SessionLocal, engine
+from app.database import engine
 from app.daily_prediction_runner_v2 import (
     DEFAULT_MAX_LATENESS_MINUTES,
     J1_PREDICTION_WINDOW,
@@ -37,24 +37,79 @@ PRODUCER_FIXTURE_DISCOVERY_INTERVAL_MINUTES = 15
 
 
 def _latest_discovery_started_at() -> datetime | None:
-    from app.j1_scheduler import OperationRunRecord
+    with engine.connect() as connection:
+        return connection.execute(
+            text(
+                """
+                SELECT started_at
+                FROM operation_run_records
+                WHERE operation = :operation
+                  AND status IN ('OK', 'DEGRADED')
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {"operation": PRODUCER_FIXTURE_DISCOVERY_OPERATION},
+        ).scalar_one_or_none()
 
-    with SessionLocal() as session:
-        row = session.scalar(
-            select(OperationRunRecord)
-            .where(
-                OperationRunRecord.operation == PRODUCER_FIXTURE_DISCOVERY_OPERATION,
-                OperationRunRecord.status.in_(["OK", "DEGRADED"]),
-            )
-            .order_by(OperationRunRecord.started_at.desc(), OperationRunRecord.id.desc())
-            .limit(1)
+
+def _start_discovery_run() -> int:
+    now = datetime.now(timezone.utc)
+    with engine.begin() as connection:
+        return int(
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO operation_run_records
+                        (operation, source, status, started_at, selected_fixtures, counts)
+                    VALUES
+                        (:operation, :source, 'RUNNING', :started_at, 0, CAST(:counts AS jsonb))
+                    RETURNING id
+                    """
+                ),
+                {
+                    "operation": PRODUCER_FIXTURE_DISCOVERY_OPERATION,
+                    "source": "render_producer",
+                    "started_at": now,
+                    "counts": "{}",
+                },
+            ).scalar_one()
         )
-        return row.started_at if row is not None else None
+
+
+def _finish_discovery_run(
+    run_id: int,
+    *,
+    status: str,
+    selected_fixtures: int = 0,
+    counts: dict | None = None,
+    error: str | None = None,
+) -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                UPDATE operation_run_records
+                SET status = :status,
+                    finished_at = :finished_at,
+                    selected_fixtures = :selected_fixtures,
+                    counts = CAST(:counts AS jsonb),
+                    error = :error
+                WHERE id = :run_id
+                """
+            ),
+            {
+                "run_id": run_id,
+                "status": status,
+                "finished_at": datetime.now(timezone.utc),
+                "selected_fixtures": int(selected_fixtures),
+                "counts": json.dumps(counts or {}, ensure_ascii=False),
+                "error": error,
+            },
+        )
 
 
 async def _maybe_refresh_business_date_fixtures() -> dict:
-    from app.j1_scheduler import _finish_run, _start_run
-
     now = datetime.now(timezone.utc)
     latest = _latest_discovery_started_at()
     if latest is not None and latest >= now - timedelta(minutes=PRODUCER_FIXTURE_DISCOVERY_INTERVAL_MINUTES):
@@ -65,7 +120,7 @@ async def _maybe_refresh_business_date_fixtures() -> dict:
             "last_started_at": latest.isoformat(),
         }
 
-    run_id = _start_run("render_producer", operation=PRODUCER_FIXTURE_DISCOVERY_OPERATION)
+    run_id = _start_discovery_run()
     try:
         install_daily_operations_business_date_fix()
         target_date = datetime.now(ZoneInfo(BUSINESS_TIMEZONE)).date()
@@ -73,17 +128,18 @@ async def _maybe_refresh_business_date_fixtures() -> dict:
         fixture_ingestion = result.get("fixture_ingestion") or {}
         target_fixtures = int((result.get("target_fixtures") or {}).get("count") or 0)
         status = "OK" if result.get("status") == "ok" else "DEGRADED"
-        _finish_run(
+        counts = {
+            "target_fixtures": target_fixtures,
+            "received": int(fixture_ingestion.get("received") or 0),
+            "created": int(fixture_ingestion.get("created") or 0),
+            "updated": int(fixture_ingestion.get("updated") or 0),
+            "skipped": int(fixture_ingestion.get("skipped") or 0),
+        }
+        _finish_discovery_run(
             run_id,
             status=status,
             selected_fixtures=target_fixtures,
-            counts={
-                "target_fixtures": target_fixtures,
-                "received": int(fixture_ingestion.get("received") or 0),
-                "created": int(fixture_ingestion.get("created") or 0),
-                "updated": int(fixture_ingestion.get("updated") or 0),
-                "skipped": int(fixture_ingestion.get("skipped") or 0),
-            },
+            counts=counts,
         )
         return {
             "status": result.get("status"),
@@ -96,7 +152,7 @@ async def _maybe_refresh_business_date_fixtures() -> dict:
             "run_id": run_id,
         }
     except Exception as exc:
-        _finish_run(run_id, status="FAILED", error=exc.__class__.__name__)
+        _finish_discovery_run(run_id, status="FAILED", error=exc.__class__.__name__)
         return {
             "status": "failed",
             "action": "refresh_failed",
