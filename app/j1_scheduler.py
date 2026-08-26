@@ -204,8 +204,6 @@ async def maybe_run_fixture_coverage_sync() -> dict[str, Any]:
                 "interval_minutes": FIXTURE_COVERAGE_INTERVAL_MINUTES,
             }
 
-        # Recheck after acquiring the lock so overlapping cron invocations cannot
-        # both refresh the same 15-minute coverage interval.
         latest = _latest_fixture_coverage_sync()
         now = datetime.now(timezone.utc)
         if latest is not None and latest.started_at >= now - timedelta(minutes=FIXTURE_COVERAGE_INTERVAL_MINUTES):
@@ -289,14 +287,6 @@ async def run_j1_cycle(
     max_lateness_minutes: int = DEFAULT_MAX_LATENESS_MINUTES,
     max_fixtures: int = DEFAULT_MAX_FIXTURES,
 ) -> dict[str, Any]:
-    """Run one J1 cycle with a database advisory lock and persistent heartbeat.
-
-    The lock makes the Render cron and the GitHub Actions fallback safe to
-    overlap. Only one process is allowed to execute the mutable J1 pipeline at a
-    time. A locked-out invocation records a heartbeat but performs no writes.
-    Runner health is persisted so an HTTP 200 cannot hide an internal J1 failure.
-    """
-
     cycle_started = perf_counter()
     capacity = activate_j1_runner_capacity()
     configured_max = int(capacity["configured_max_fixtures"])
@@ -422,28 +412,17 @@ async def run_j1_cycle(
 
 
 async def run_primary_operations_cycle() -> dict[str, Any]:
-    # Fixture coverage is refreshed before J1 selection so a same-day event that
-    # was absent from the scheduled Daily Operations Sync can still enter the
-    # official J1 pipeline before its -45 minute window.
-    fixture_coverage_sync = await maybe_run_fixture_coverage_sync()
-
     result = await run_j1_cycle(
         source="render_cron",
         max_lateness_minutes=DEFAULT_MAX_LATENESS_MINUTES,
         max_fixtures=configured_j1_max_fixtures(),
     )
-    result["fixture_coverage_sync"] = fixture_coverage_sync
 
-    # Render's existing cron still invokes `python -m app.j1_scheduler` even
-    # though render.yaml points at j1_scheduler_v2. Keep Closing/CLV active on
-    # this legacy command until the Render service definition is reconciled.
     try:
         from app.odds_window_clv import run_odds_window_clv_cycle
 
         result["odds_window_clv"] = await run_odds_window_clv_cycle()
     except Exception as exc:
-        # Closing evidence is valuable but must never invalidate a successful
-        # J1 Prediction/Decision/Ledger cycle.
         result["odds_window_clv"] = {
             "status": "failed",
             "version": "odds_window_clv_v1",
@@ -453,16 +432,14 @@ async def run_primary_operations_cycle() -> dict[str, Any]:
 
 
 async def run_render_cron_entrypoint() -> dict[str, Any]:
-    """Execute batch or producer mode without changing the Render start command.
+    """Execute fixture discovery, then batch or producer mode.
 
-    This provides a safe cutover gate for the existing cron service. Production
-    remains in batch mode by default. After healthy claim workers are confirmed,
-    setting ``J1_EXECUTION_MODE=producer`` switches the same cron process to the
-    queue producer. The dedicated ``app.j1_work_producer`` remains the canonical
-    producer implementation and can become the start command later without
-    changing behavior.
+    Fixture discovery deliberately happens before the execution-mode branch so it
+    remains active when production is in producer mode. This only refreshes today's
+    fixture catalog; official odds/prediction/decision timing stays in J1.
     """
 
+    fixture_coverage_sync = await maybe_run_fixture_coverage_sync()
     mode = configured_j1_execution_mode()
     if mode == J1_EXECUTION_MODE_PRODUCER:
         from app.j1_work_producer import run_producer_cycle
@@ -471,6 +448,7 @@ async def run_render_cron_entrypoint() -> dict[str, Any]:
     else:
         result = await run_primary_operations_cycle()
 
+    result["fixture_coverage_sync"] = fixture_coverage_sync
     execution = result.setdefault("execution", {})
     execution.update(
         {
