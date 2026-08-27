@@ -14,12 +14,18 @@ DASHBOARD_MATCH_CENTER_V3_REFRESH_MS = 300_000
 DASHBOARD_MATCH_CENTER_V3_REFRESH_SECONDS = DASHBOARD_MATCH_CENTER_V3_REFRESH_MS // 1000
 router = APIRouter(tags=["Dashboard Match Center V3"])
 
+_NEWS_OLD = '''<div class="box"><div class="label">Notícias / alertas</div><div class="warning">${esc(f.news?.status||'—')}</div><div class="muted reason">${esc(f.news?.reason||'')}</div></div>'''
+_NEWS_NEW = '''<div class="box"><div class="label">Fatos / alertas Enigma</div><div class="warning">${esc(f.news?.status||'—')}</div>${(f.news?.items||[]).map(x=>`<div class="reason">• ${esc(x)}</div>`).join('')||'<div class="muted reason">sem fato quantitativo adicional</div>'}<div class="muted reason" style="margin-top:7px">${esc(f.news?.reason||'')}</div></div>'''
+
 DASHBOARD_MATCH_CENTER_V3_5M_HTML = DASHBOARD_MATCH_CENTER_V3_HTML.replace(
     "setInterval(load,60000)",
     f"setInterval(load,{DASHBOARD_MATCH_CENTER_V3_REFRESH_MS})",
 ).replace(
     "J1 automático · análise pré-jogo · RESEARCH ONLY",
     "J1 automático · análise pré-jogo · atualização do painel a cada 5 min · RESEARCH ONLY",
+).replace(
+    _NEWS_OLD,
+    _NEWS_NEW,
 )
 
 
@@ -70,6 +76,7 @@ def dashboard_match_center_v3_api(target_date: date | None = Query(default=None)
     policy["auto_refresh_seconds"] = DASHBOARD_MATCH_CENTER_V3_REFRESH_SECONDS
     policy["d1_preload_available"] = True
     policy["j1_predictions_remain_official_only_inside_j1_window"] = True
+    policy["xg_xga_are_informational_only"] = True
     payload["policy"] = policy
     payload["date_navigation"] = _date_navigation()
     return payload
