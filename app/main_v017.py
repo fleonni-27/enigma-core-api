@@ -30,7 +30,7 @@ from app.xg_backfill_startup import install_xg_backfill_startup
 
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
-app.version = "0.53.7"
+app.version = "0.53.8"
 install_daily_operations_business_date_fix()
 install_evaluation_v1_xg_chronology_fix()
 install_confirmation_holdout_j1_hook()
@@ -49,9 +49,6 @@ app.include_router(odds_window_clv_router)
 app.include_router(forward_test_report_v2_router)
 app.include_router(forward_test_report_v3_router)
 app.include_router(j1_work_router)
-# Confirmation-aware routes are intentionally registered before the legacy V3
-# routes so the public Match Center path receives the holdout overlay while the
-# underlying bounded dashboard builder remains unchanged.
 app.include_router(dashboard_confirmation_holdout_router)
 app.include_router(dashboard_match_center_v3_router)
 app.include_router(dashboard_match_center_alias_router)
