@@ -23,17 +23,19 @@ from app.dashboard_j1_watchlist_patch import install_dashboard_j1_watchlist_patc
 from app.dashboard_match_center_v3_5m import router as dashboard_match_center_v3_router
 from app.dashboard_match_center_alias import router as dashboard_match_center_alias_router
 from app.daily_analysis_report import router as daily_analysis_report_router
+from app.new_provider_env_audit import install_one_shot_new_provider_env_audit
 from app.sportmonks_coverage_audit import router as sportmonks_coverage_audit_router
 from app.xg_historical_backfill import router as xg_historical_backfill_router
 from app.xg_backfill_startup import install_xg_backfill_startup
 
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
-app.version = "0.53.4"
+app.version = "0.53.5"
 install_daily_operations_business_date_fix()
 install_evaluation_v1_xg_chronology_fix()
 install_confirmation_holdout_j1_hook()
 install_dashboard_j1_watchlist_patch()
+install_one_shot_new_provider_env_audit(app)
 install_confirmation_holdout_startup(app)
 app.include_router(enigma_rating_router)
 app.include_router(enigma_rating_v2_router)
