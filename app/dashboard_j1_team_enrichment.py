@@ -47,27 +47,31 @@ def _latest_snapshot_map(session, fixture_ids: list[int]) -> dict[int, FixtureDa
 def _observation(fixture: Fixture, snapshot: FixtureDataSnapshot, team: str) -> dict[str, Any] | None:
     statistics = _as_list(snapshot.statistics)
     xg_rows = _as_list(snapshot.xg)
-    if not statistics:
-        return None
     if fixture.home_team == team:
         side, opponent = "home", "away"
     elif fixture.away_team == team:
         side, opponent = "away", "home"
     else:
         return None
-    goals_for = _stat_value(statistics, STAT_NAMES["goals"], side)
-    goals_against = _stat_value(statistics, STAT_NAMES["goals"], opponent)
-    if goals_for is None or goals_against is None:
-        return None
+
+    goals_for = _stat_value(statistics, STAT_NAMES["goals"], side) if statistics else None
+    goals_against = _stat_value(statistics, STAT_NAMES["goals"], opponent) if statistics else None
     xg_for = _xg_value(xg_rows, statistics, side)
     xg_against = _xg_value(xg_rows, statistics, opponent)
-    result = "V" if float(goals_for) > float(goals_against) else "E" if float(goals_for) == float(goals_against) else "D"
+    if goals_for is None and goals_against is None and xg_for is None and xg_against is None:
+        return None
+
+    result = None
+    points = None
+    if goals_for is not None and goals_against is not None:
+        result = "V" if float(goals_for) > float(goals_against) else "E" if float(goals_for) == float(goals_against) else "D"
+        points = 3.0 if result == "V" else 1.0 if result == "E" else 0.0
     return {
         "starts_at": _aware_utc(fixture.starts_at),
         "result": result,
-        "points": 3.0 if result == "V" else 1.0 if result == "E" else 0.0,
-        "goals_for": float(goals_for),
-        "goals_against": float(goals_against),
+        "points": points,
+        "goals_for": float(goals_for) if goals_for is not None else None,
+        "goals_against": float(goals_against) if goals_against is not None else None,
         "xg_for": float(xg_for) if xg_for is not None else None,
         "xg_against": float(xg_against) if xg_against is not None else None,
     }
@@ -76,19 +80,21 @@ def _observation(fixture: Fixture, snapshot: FixtureDataSnapshot, team: str) -> 
 def _team_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     xg_for = [float(r["xg_for"]) for r in rows if r.get("xg_for") is not None]
     xg_against = [float(r["xg_against"]) for r in rows if r.get("xg_against") is not None]
-    goals_for = [float(r["goals_for"]) for r in rows]
-    goals_against = [float(r["goals_against"]) for r in rows]
-    points = [float(r["points"]) for r in rows]
+    goals_for = [float(r["goals_for"]) for r in rows if r.get("goals_for") is not None]
+    goals_against = [float(r["goals_against"]) for r in rows if r.get("goals_against") is not None]
+    points = [float(r["points"]) for r in rows if r.get("points") is not None]
+    form = [str(r["result"]) for r in rows if r.get("result") is not None]
     return {
         "xg": _avg(xg_for),
         "xga": _avg(xg_against),
         "goals_for_avg": _avg(goals_for),
         "goals_against_avg": _avg(goals_against),
-        "form_5": [str(r["result"]) for r in rows[:5]],
-        "form_10_ppm": _avg(points) if len(rows) >= 10 else None,
+        "form_5": form[:5],
+        "form_10_ppm": _avg(points[:10]) if len(points) >= 10 else None,
         "history_matches": len(rows),
         "xg_matches": len(xg_for),
         "xga_matches": len(xg_against),
+        "result_matches": len(points),
         "elo": None,
     }
 
@@ -119,14 +125,14 @@ def _facts(home_team: str, away_team: str, home: dict[str, Any], away: dict[str,
             wins = form.count("V")
             losses = form.count("D")
             if wins >= 4:
-                facts.append(f"{team} venceu pelo menos 4 dos últimos 5 jogos com dados persistidos.")
+                facts.append(f"{team} venceu pelo menos 4 dos últimos 5 jogos com resultados persistidos.")
             elif losses >= 4:
-                facts.append(f"{team} perdeu pelo menos 4 dos últimos 5 jogos com dados persistidos.")
+                facts.append(f"{team} perdeu pelo menos 4 dos últimos 5 jogos com resultados persistidos.")
         xg = row.get("xg")
         goals = row.get("goals_for_avg")
         if xg is not None and goals is not None and abs(float(goals) - float(xg)) >= 0.45:
             direction = "acima" if float(goals) > float(xg) else "abaixo"
-            facts.append(f"{team} vem marcando {direction} do xG médio, sinal de possível diferença entre produção e conversão.")
+            facts.append(f"{team} vem marcando {direction} do xG médio, sinal de diferença entre produção e conversão.")
     return facts[:5]
 
 
