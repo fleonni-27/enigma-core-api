@@ -7,14 +7,13 @@ from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
-from app.dashboard_j1_team_enrichment import build_bulk_team_enrichment
 from app.dashboard_match_center_v3 import DASHBOARD_MATCH_CENTER_V3_HTML
 from app.dashboard_operations_v2 import build_dashboard_operations_v2
 from app.database import SessionLocal
 from app.fixture_results import fixture_results_by_sportmonks_ids
 from app.models import OddsSnapshot
 
-DASHBOARD_MATCH_CENTER_V3_VERSION = "dashboard_match_center_v3_light_enriched_v1"
+DASHBOARD_MATCH_CENTER_V3_VERSION = "dashboard_match_center_v3_light"
 router = APIRouter(tags=["Dashboard Match Center V3"])
 
 
@@ -118,17 +117,16 @@ def _empty_team_metrics() -> dict[str, Any]:
         "form_5": [],
         "form_10_ppm": None,
         "elo": None,
-        "history_matches": 0,
-        "xg_matches": 0,
-        "xga_matches": 0,
     }
 
 
 def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[str, Any]:
+    # Critical invariant: this HTTP path is read-only and bounded. Heavy Enigma
+    # Rating/history reconstruction must be produced outside the dashboard request
+    # and persisted before presentation.
     base = build_dashboard_operations_v2(target_date=target_date)
     items = list(base.get("fixtures") or [])
     odds_by_fixture = _bulk_j1_odds(items)
-    team_enrichment = build_bulk_team_enrichment(items)
     sportmonks_ids = [int(item["sportmonks_fixture_id"]) for item in items]
     final_results = fixture_results_by_sportmonks_ids(sportmonks_ids) if sportmonks_ids else {}
 
@@ -148,16 +146,6 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
         if final_row and final_row.get("home_goals") is not None and final_row.get("away_goals") is not None:
             final_score = f"{final_row.get('home_goals')} x {final_row.get('away_goals')}"
 
-        enrichment = team_enrichment.get(int(item["fixture_id"]), {})
-        metrics = enrichment.get("team_metrics") or {"home": _empty_team_metrics(), "away": _empty_team_metrics()}
-        facts = list(enrichment.get("facts") or [])
-        quality = dict(enrichment.get("data_quality") or {})
-        has_metric_data = any(
-            (metrics.get(side) or {}).get(key) is not None
-            for side in ("home", "away")
-            for key in ("xg", "xga", "goals_for_avg", "goals_against_avg")
-        )
-
         fixtures.append(
             {
                 **item,
@@ -166,26 +154,26 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
                 "confidence_band": _confidence_band(confidence),
                 "odds_1x2": odds_by_fixture.get(int(item["fixture_id"]), {"1": None, "X": None, "2": None, "bookmaker": None}),
                 "decision_explanation": _decision_reason_labels(list(decision.get("reason_codes") or [])),
-                "team_metrics": metrics,
+                "team_metrics": {
+                    "home": _empty_team_metrics(),
+                    "away": _empty_team_metrics(),
+                },
                 "final_score": final_score,
                 "competition_context": {
                     "official_table_position": None,
                     "first_leg_score": None,
-                    "status": "LEAGUE_METADATA_CONNECTED",
-                    "reason": "metadados de liga disponíveis; classificação formal ainda não persistida no Match Center",
+                    "status": "SOURCE_NOT_CONNECTED",
+                    "reason": "competition standings and formal knockout tie metadata are not persisted yet",
                 },
                 "news": {
-                    "items": facts,
-                    "status": "ENIGMA_ANALYSIS" if facts else ("DATA_AVAILABLE" if has_metric_data else "INSUFFICIENT_PREMATCH_HISTORY"),
-                    "reason": "fatos e alertas gerados pela Enigma Core a partir de histórico pré-jogo persistido; não são notícias editoriais externas",
+                    "items": [],
+                    "status": "SOURCE_NOT_CONNECTED",
+                    "reason": "editorial/injury news feed is not connected",
                 },
                 "data_quality": {
-                    **quality,
-                    "rating_context_status": "INFORMATIONAL_ENRICHMENT_AVAILABLE" if has_metric_data else "INSUFFICIENT_PREMATCH_HISTORY",
+                    "rating_context_status": "BACKGROUND_ENRICHMENT_PENDING",
                     "dashboard_request_is_bounded": True,
-                    "provider_calls_during_dashboard_request": False,
-                    "xg_xga_informational_only": True,
-                    "xg_xga_not_used_to_change_current_prediction": True,
+                    "heavy_context_is_not_recomputed_on_refresh": True,
                 },
             }
         )
@@ -200,8 +188,7 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
             "j1_pipeline_is_primary_live_prematch_source": True,
             "unsupported_sources_are_never_fabricated": True,
             "dashboard_request_is_read_only_and_bounded": True,
-            "provider_calls_during_dashboard_refresh": False,
-            "xg_xga_are_informational_only": True,
+            "heavy_enrichment_runs_outside_http_refresh": True,
             "confidence_strong_favorite_threshold": 0.55,
             "confidence_effective_favorite_threshold": 0.45,
         },
