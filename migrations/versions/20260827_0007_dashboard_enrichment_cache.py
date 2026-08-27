@@ -12,6 +12,8 @@ down_revision = "20260825_0006"
 branch_labels = None
 depends_on = None
 
+JSON_TYPE = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
+
 
 def upgrade() -> None:
     op.create_table(
@@ -19,7 +21,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
         sa.Column("fixture_id", sa.BigInteger(), nullable=False),
         sa.Column("version", sa.String(length=80), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", JSON_TYPE, nullable=False),
         sa.Column("generated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["fixture_id"], ["fixtures.id"]),
         sa.PrimaryKeyConstraint("id"),
