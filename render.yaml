@@ -86,31 +86,6 @@ services:
         value: "5"
 
   - type: cron
-    name: enigma-dashboard-enrichment
-    runtime: python
-    region: virginia
-    branch: main
-    autoDeploy: true
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.dashboard_enrichment_runner
-    schedule: "*/15 * * * *"
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: DATABASE_URL
-        fromService:
-          type: web
-          name: enigma-core-api
-          envVarKey: DATABASE_URL
-      - key: SPORTMONKS_API_TOKEN
-        fromService:
-          type: web
-          name: enigma-core-api
-          envVarKey: SPORTMONKS_API_TOKEN
-      - key: SPORTMONKS_BASE_URL
-        value: https://api.sportmonks.com/v3/football
-
-  - type: cron
     name: enigma-daily-analysis-report
     runtime: python
     region: virginia
