@@ -21,13 +21,18 @@ elif database_url.startswith("postgres://"):
 # long-lived advisory-lock connection plus a scoped ORM session in the same J1
 # cycle). Keep exactly two fixed connections per process and disallow overflow,
 # which preserves that internal concurrency without allowing unbounded bursts.
-engine = create_engine(
-    database_url,
-    pool_pre_ping=True,
-    pool_size=2,
-    max_overflow=0,
-    pool_timeout=15,
-    pool_recycle=120,
-    pool_use_lifo=True,
-)
+# SQLite is used by CI and does not accept QueuePool-only arguments.
+if database_url.startswith("sqlite"):
+    engine = create_engine(database_url, pool_pre_ping=True)
+else:
+    engine = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=0,
+        pool_timeout=15,
+        pool_recycle=120,
+        pool_use_lifo=True,
+    )
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
