@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app import daily_prediction_runner as legacy
 from app import daily_prediction_runner_v2 as runner_module
+from app.dashboard_enrichment_worker_hook import maybe_run_idle_dashboard_enrichment
 from app.database import SessionLocal
 from app.daily_prediction_runner_v2 import (
     DAILY_PREDICTION_RUNNER_VERSION,
@@ -79,8 +80,6 @@ def _result_item_status(result: dict[str, Any]) -> str:
 
 
 def _classify_result(result: dict[str, Any]) -> tuple[bool, bool, str]:
-    """Return (success, retryable, item_status)."""
-
     item_status = _result_item_status(result)
     if item_status == "fixture_missing":
         return False, False, item_status
@@ -100,14 +99,6 @@ async def _run_claimed_fixture(
     claim: dict[str, Any],
     runtime: InferenceRuntimeV2,
 ) -> dict[str, Any]:
-    """Run the canonical V2 pipeline for exactly the claimed fixture.
-
-    This adapter deliberately reuses the existing V2 runner instead of copying
-    inference/decision/ledger logic. The dedicated worker process is single-job
-    at a time, so temporarily pinning the selector and runtime is process-local
-    and cannot affect another worker instance.
-    """
-
     fixture = _load_fixture(int(claim["fixture_id"]))
     if fixture is None:
         return {
@@ -168,9 +159,6 @@ class _LeaseHeartbeat:
                 if not ok:
                     return
             except Exception:
-                # Losing a heartbeat must not kill the in-flight prediction.
-                # The immutable prediction/ledger constraints remain the final
-                # duplicate-write guard if another worker later reclaims it.
                 continue
 
     def __enter__(self):
@@ -284,15 +272,13 @@ async def run_worker_loop() -> None:
                 "lease_seconds": lease_seconds,
                 "poll_seconds": poll_seconds,
                 "max_attempts": max_attempts,
+                "idle_dashboard_enrichment": True,
             }
         ),
         flush=True,
     )
 
     while not stopping.is_set():
-        # Post-kickoff expiry is owned by the producer once per minute. Workers
-        # only perform the indexed claim scan, avoiding N workers repeatedly
-        # sweeping the queue while idle.
         outcome = await process_one_claim(
             worker_id=worker_id,
             runtime=runtime,
@@ -305,6 +291,21 @@ async def run_worker_loop() -> None:
             if once:
                 break
             continue
+
+        # J1 always has priority. Enrichment is attempted only after the indexed
+        # claim scan finds no J1 work. A PostgreSQL advisory lock ensures only
+        # one of the three workers can materialize dashboard context at a time.
+        enrichment = await maybe_run_idle_dashboard_enrichment(worker_id=worker_id)
+        if enrichment.get("status") in {"completed", "failed"}:
+            print(
+                json.dumps(
+                    {"dashboard_enrichment": enrichment},
+                    ensure_ascii=False,
+                    default=str,
+                ),
+                flush=True,
+            )
+
         if once:
             break
         try:
