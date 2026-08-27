@@ -6,8 +6,6 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    # Apply Alembic migrations and capture bounded before/after EXPLAIN ANALYZE
-    # plans before the new web version receives traffic.
     preDeployCommand: python -m app.db_release
     startCommand: uvicorn app.main_v017:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
@@ -88,6 +86,31 @@ services:
         value: "5"
 
   - type: cron
+    name: enigma-dashboard-enrichment
+    runtime: python
+    region: virginia
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.dashboard_enrichment_runner
+    schedule: "*/15 * * * *"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: DATABASE_URL
+      - key: SPORTMONKS_API_TOKEN
+        fromService:
+          type: web
+          name: enigma-core-api
+          envVarKey: SPORTMONKS_API_TOKEN
+      - key: SPORTMONKS_BASE_URL
+        value: https://api.sportmonks.com/v3/football
+
+  - type: cron
     name: enigma-daily-analysis-report
     runtime: python
     region: virginia
@@ -95,7 +118,6 @@ services:
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.daily_analysis_report
-    # 04:30 UTC = 01:30 America/Sao_Paulo. The runner reports the previous business date.
     schedule: "30 4 * * *"
     envVars:
       - key: APP_ENV

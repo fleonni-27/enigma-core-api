@@ -21,11 +21,15 @@ class DashboardJ1EnrichmentTests(unittest.TestCase):
         self.assertTrue(any("contenção de xG" in fact for fact in facts))
         self.assertFalse(any("notícia" in fact.lower() for fact in facts))
 
-    def test_match_center_uses_bulk_enrichment_without_provider_call_on_refresh(self):
+    def test_match_center_reads_materialized_enrichment_without_provider_call_on_refresh(self):
         source = Path("app/dashboard_match_center_v3_light.py").read_text()
+        runner_source = Path("app/dashboard_enrichment_runner.py").read_text()
         html_source = Path("app/dashboard_match_center_v3_5m.py").read_text()
-        self.assertIn("build_bulk_team_enrichment(items)", source)
+        self.assertIn("load_dashboard_enrichment(fixture_ids)", source)
+        self.assertNotIn("build_bulk_team_enrichment(items)", source)
+        self.assertIn("build_bulk_team_enrichment(items)", runner_source)
         self.assertIn('"provider_calls_during_dashboard_refresh": False', source)
+        self.assertIn('"history_reconstruction_during_dashboard_refresh": False', source)
         self.assertIn('"xg_xga_are_informational_only": True', source)
         self.assertIn("Fatos / alertas Enigma", html_source)
 

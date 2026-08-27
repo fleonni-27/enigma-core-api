@@ -46,9 +46,6 @@ class OddsSnapshot(Base):
     odd: Mapped[Decimal] = mapped_column(Numeric(10, 4))
     source: Mapped[str] = mapped_column(String(80), default="sportmonks")
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # first_seen_at marks when this price state appeared. fetched_at remains the
-    # latest time the same state was observed, preserving every existing caller's
-    # quote-freshness semantics without storing repeated identical rows.
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     observation_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
@@ -65,3 +62,14 @@ class FixtureDataSnapshot(Base):
     statistics: Mapped[dict | list | None] = mapped_column(JSONB)
     xg: Mapped[dict | list | None] = mapped_column(JSONB)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class DashboardEnrichmentSnapshot(Base):
+    __tablename__ = "dashboard_enrichment_snapshots"
+    __table_args__ = (UniqueConstraint("fixture_id", name="uq_dashboard_enrichment_fixture"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), index=True)
+    version: Mapped[str] = mapped_column(String(80))
+    payload: Mapped[dict] = mapped_column(JSONB)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
