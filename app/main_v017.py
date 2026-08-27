@@ -24,12 +24,13 @@ from app.dashboard_match_center_v3_5m import router as dashboard_match_center_v3
 from app.dashboard_match_center_alias import router as dashboard_match_center_alias_router
 from app.daily_analysis_report import router as daily_analysis_report_router
 from app.sportmonks_coverage_audit import router as sportmonks_coverage_audit_router
+from app.sportmonks_enrichment_provider import router as sportmonks_enrichment_provider_router
 from app.xg_historical_backfill import router as xg_historical_backfill_router
 from app.xg_backfill_startup import install_xg_backfill_startup
 
 # Current production wrapper. Routers are registered in main_v015 for backward
 # compatibility with Render services whose start command has not been updated.
-app.version = "0.53.6"
+app.version = "0.53.7"
 install_daily_operations_business_date_fix()
 install_evaluation_v1_xg_chronology_fix()
 install_confirmation_holdout_j1_hook()
@@ -56,5 +57,6 @@ app.include_router(dashboard_match_center_v3_router)
 app.include_router(dashboard_match_center_alias_router)
 app.include_router(daily_analysis_report_router)
 app.include_router(sportmonks_coverage_audit_router)
+app.include_router(sportmonks_enrichment_provider_router)
 app.include_router(xg_historical_backfill_router)
 install_xg_backfill_startup(app)
