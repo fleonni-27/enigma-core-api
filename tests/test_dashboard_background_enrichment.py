@@ -23,11 +23,16 @@ class DashboardBackgroundEnrichmentTests(unittest.TestCase):
         self.assertIn('"separate_from_j1_runner": True', source)
         self.assertIn('"no_prediction_or_decision_writes": True', source)
 
-    def test_render_has_isolated_fifteen_minute_cron(self):
-        source = (ROOT / "render.yaml").read_text()
-        self.assertIn("name: enigma-dashboard-enrichment", source)
-        self.assertIn("startCommand: python -m app.dashboard_enrichment_runner", source)
-        self.assertIn('schedule: "*/15 * * * *"', source)
+    def test_existing_worker_runs_enrichment_only_when_idle(self):
+        worker = (ROOT / "app" / "j1_claim_worker.py").read_text()
+        hook = (ROOT / "app" / "dashboard_enrichment_worker_hook.py").read_text()
+        render = (ROOT / "render.yaml").read_text()
+        self.assertIn("maybe_run_idle_dashboard_enrichment", worker)
+        self.assertIn("if outcome is not None", worker)
+        self.assertIn("ENRICHMENT_IDLE_INTERVAL_SECONDS = 15 * 60", hook)
+        self.assertIn("pg_try_advisory_lock", hook)
+        self.assertIn("ENRICHMENT_TIMEOUT_SECONDS = 120", hook)
+        self.assertNotIn("name: enigma-dashboard-enrichment", render)
 
     def test_cache_has_one_row_per_fixture(self):
         source = (ROOT / "migrations" / "versions" / "20260827_0007_dashboard_enrichment_cache.py").read_text()
