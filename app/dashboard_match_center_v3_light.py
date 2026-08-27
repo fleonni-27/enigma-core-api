@@ -18,6 +18,21 @@ DASHBOARD_MATCH_CENTER_V3_VERSION = "dashboard_match_center_v3_light_cached_enri
 router = APIRouter(tags=["Dashboard Match Center V3"])
 
 
+CBF_EXTERNAL_COVERAGE = {
+    date(2026, 8, 27): [
+        {
+            "external_id": "cbf-copa-do-brasil-2026-jogo-143",
+            "competition": "Copa do Brasil",
+            "home_team": "Internacional",
+            "away_team": "Grêmio",
+            "starts_at": "2026-08-27T23:00:00+00:00",
+            "source": "CBF_EXTERNAL_COVERAGE",
+            "source_reference": "Copa do Brasil 2026 · Quartas de Final · Jogo 143",
+        }
+    ]
+}
+
+
 def _f(value: Any) -> float | None:
     try:
         return float(value) if value is not None else None
@@ -121,6 +136,72 @@ def _empty_team_metrics() -> dict[str, Any]:
     }
 
 
+def _external_coverage_fixture(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "fixture_id": row["external_id"],
+        "sportmonks_fixture_id": None,
+        "league": row["competition"],
+        "competition": row["competition"],
+        "home_team": row["home_team"],
+        "away_team": row["away_team"],
+        "starts_at": row["starts_at"],
+        "status": "SCHEDULED_EXTERNAL_COVERAGE",
+        "snapshot_window": None,
+        "prediction": None,
+        "probabilities": {},
+        "decision": {
+            "decision": "MONITORAMENTO_EXTERNO",
+            "reason_codes": ["SPORTMONKS_FIXTURE_NOT_AVAILABLE"],
+        },
+        "confidence": None,
+        "confidence_pct": None,
+        "confidence_band": "UNAVAILABLE",
+        "odds_1x2": {"1": None, "X": None, "2": None, "bookmaker": None},
+        "decision_explanation": [
+            "fixture confirmado pela CBF e ausente no feed diário da Sportmonks; sem Prediction/Decision J1 fabricada"
+        ],
+        "team_metrics": {"home": _empty_team_metrics(), "away": _empty_team_metrics()},
+        "final_score": None,
+        "competition_context": {
+            "official_table_position": None,
+            "first_leg_score": None,
+            "status": "CBF_EXTERNAL_COVERAGE",
+            "reason": row["source_reference"],
+        },
+        "news": {
+            "items": ["Cobertura externa CBF ativada para manter o jogo visível no Match Center."],
+            "status": "EXTERNAL_COVERAGE",
+            "reason": "Sportmonks não retornou o fixture no feed diário; nenhuma métrica ou odd foi inventada.",
+        },
+        "data_quality": {
+            "rating_context_status": "EXTERNAL_FIXTURE_NO_J1_DATA",
+            "dashboard_request_is_bounded": True,
+            "provider_calls_during_dashboard_request": False,
+            "history_reconstruction_during_dashboard_request": False,
+            "xg_xga_informational_only": True,
+            "xg_xga_not_used_to_change_current_prediction": True,
+            "external_coverage": True,
+            "source": row["source"],
+            "source_reference": row["source_reference"],
+            "sportmonks_fixture_missing": True,
+            "official_j1_prediction_available": False,
+        },
+    }
+
+
+def _append_external_coverage(fixtures: list[dict[str, Any]], *, target_date: date | None) -> None:
+    effective_date = target_date or date.today()
+    rows = CBF_EXTERNAL_COVERAGE.get(effective_date) or []
+    existing = {
+        (str(item.get("home_team") or "").strip().lower(), str(item.get("away_team") or "").strip().lower())
+        for item in fixtures
+    }
+    for row in rows:
+        key = (row["home_team"].strip().lower(), row["away_team"].strip().lower())
+        if key not in existing:
+            fixtures.append(_external_coverage_fixture(row))
+
+
 def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[str, Any]:
     # HTTP invariant: only bounded database reads. Sportmonks and historical
     # reconstruction run in app.dashboard_enrichment_runner, never here.
@@ -192,6 +273,8 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
             }
         )
 
+    _append_external_coverage(fixtures, target_date=target_date)
+
     return {
         **base,
         "version": DASHBOARD_MATCH_CENTER_V3_VERSION,
@@ -201,6 +284,7 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
             "dashboard_self_feeds_from_database": True,
             "j1_pipeline_is_primary_live_prematch_source": True,
             "unsupported_sources_are_never_fabricated": True,
+            "external_cbf_coverage_is_display_only": True,
             "dashboard_request_is_read_only_and_bounded": True,
             "provider_calls_during_dashboard_refresh": False,
             "history_reconstruction_during_dashboard_refresh": False,
