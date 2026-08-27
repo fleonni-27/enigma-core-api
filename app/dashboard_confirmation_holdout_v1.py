@@ -58,18 +58,37 @@ def _monitoring_watchlist(target_date: date, fixtures: list[dict[str, Any]]) -> 
     ]
 
 
+def _numeric_fixture_id(item: dict[str, Any]) -> int | None:
+    value = item.get("fixture_id")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_dashboard_with_confirmation_holdout(
     *, target_date: date | None = None
 ) -> dict[str, Any]:
     payload = build_dashboard_match_center_v3(target_date=target_date)
     fixtures = list(payload.get("fixtures") or [])
-    state = confirmation_holdout_dashboard_state(fixtures)
+
+    # Confirmation holdout only applies to persisted Enigma fixtures with numeric
+    # database IDs. Display-only external coverage cards must never enter this path.
+    confirmation_fixtures = [item for item in fixtures if _numeric_fixture_id(item) is not None]
+    state = confirmation_holdout_dashboard_state(confirmation_fixtures)
     by_fixture_id = state.get("by_fixture_id") or {}
 
     enriched: list[dict[str, Any]] = []
     for item in fixtures:
-        fixture_id = int(item["fixture_id"])
-        enriched.append({**item, "confirmation_holdout": by_fixture_id.get(fixture_id)})
+        fixture_id = _numeric_fixture_id(item)
+        enriched.append(
+            {
+                **item,
+                "confirmation_holdout": by_fixture_id.get(fixture_id) if fixture_id is not None else None,
+            }
+        )
 
     effective_date = target_date or date.fromisoformat(str(payload.get("target_date") or payload.get("business_date")))
     watchlist = _monitoring_watchlist(effective_date, enriched)
@@ -82,6 +101,7 @@ def build_dashboard_with_confirmation_holdout(
             "confirmation_holdout_progress_counts_settled_eligible_targets": True,
             "monitoring_watchlist_is_not_official_j1": True,
             "watchlist_promotes_to_official_only_after_provider_fixture_ingestion": True,
+            "external_display_only_fixtures_excluded_from_confirmation_holdout": True,
         }
     )
     return {
