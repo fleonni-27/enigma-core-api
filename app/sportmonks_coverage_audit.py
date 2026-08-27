@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from typing import Any
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, FastAPI, Query
 
 from app.sportmonks import SportmonksClient
 
@@ -139,3 +140,14 @@ async def sportmonks_coverage_audit(
                 "no_prediction_or_decision_created": True,
             },
         }
+
+
+def install_one_shot_startup_audit(app: FastAPI) -> None:
+    @app.on_event("startup")
+    async def _sportmonks_one_shot_audit() -> None:
+        result = await sportmonks_coverage_audit(target_date=date(2026, 8, 26))
+        print(
+            "SPORTMONKS_COVERAGE_AUDIT_RESULT "
+            + json.dumps(result, ensure_ascii=False, default=str),
+            flush=True,
+        )
