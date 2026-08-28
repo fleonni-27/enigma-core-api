@@ -14,7 +14,7 @@ from app.database import SessionLocal
 from app.fixture_results import fixture_results_by_sportmonks_ids
 from app.models import OddsSnapshot
 
-DASHBOARD_MATCH_CENTER_V3_VERSION = "dashboard_match_center_v3_light_cached_enrichment_v1"
+DASHBOARD_MATCH_CENTER_V3_VERSION = "dashboard_match_center_v3_light_cached_enrichment_v2_rich_prematch"
 router = APIRouter(tags=["Dashboard Match Center V3"])
 
 
@@ -161,6 +161,7 @@ def _external_coverage_fixture(row: dict[str, Any]) -> dict[str, Any]:
             "fixture confirmado pela CBF e ausente no feed diário da Sportmonks; sem Prediction/Decision J1 fabricada"
         ],
         "team_metrics": {"home": _empty_team_metrics(), "away": _empty_team_metrics()},
+        "prematch_provider": None,
         "final_score": None,
         "competition_context": {
             "official_table_position": None,
@@ -204,7 +205,7 @@ def _append_external_coverage(fixtures: list[dict[str, Any]], *, target_date: da
 
 def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[str, Any]:
     # HTTP invariant: only bounded database reads. Sportmonks and historical
-    # reconstruction run in app.dashboard_enrichment_runner, never here.
+    # reconstruction never run in the dashboard request.
     base = build_dashboard_operations_v2(target_date=target_date)
     items = list(base.get("fixtures") or [])
     fixture_ids = [int(item["fixture_id"]) for item in items]
@@ -233,11 +234,20 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
         metrics = cached.get("team_metrics") or {"home": _empty_team_metrics(), "away": _empty_team_metrics()}
         facts = list(cached.get("facts") or [])
         quality = dict(cached.get("data_quality") or {})
+        provider = cached.get("prematch_provider") if isinstance(cached.get("prematch_provider"), dict) else None
+        provider_sections = (provider or {}).get("sections") or {}
+        has_provider_context = bool((provider or {}).get("available_sections"))
         has_metrics = any(
             (metrics.get(side) or {}).get(key) is not None
             for side in ("home", "away")
             for key in ("xg", "xga", "goals_for_avg", "goals_against_avg")
         )
+
+        competition_bits = [
+            key.replace("_", " ")
+            for key in ("league", "season", "stage", "round", "venue")
+            if provider_sections.get(key)
+        ]
 
         fixtures.append(
             {
@@ -248,17 +258,22 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
                 "odds_1x2": odds_by_fixture.get(int(item["fixture_id"]), {"1": None, "X": None, "2": None, "bookmaker": None}),
                 "decision_explanation": _decision_reason_labels(list(decision.get("reason_codes") or [])),
                 "team_metrics": metrics,
+                "prematch_provider": provider,
                 "final_score": final_score,
                 "competition_context": {
                     "official_table_position": None,
                     "first_leg_score": None,
-                    "status": "LEAGUE_METADATA_CONNECTED",
-                    "reason": "metadados de liga disponíveis; classificação formal ainda não persistida no Match Center",
+                    "status": "SPORTMONKS_J1_CONTEXT" if has_provider_context else "LEAGUE_METADATA_CONNECTED",
+                    "reason": (
+                        "contexto pré-jogo persistido na J1: " + ", ".join(competition_bits)
+                        if competition_bits
+                        else "metadados de liga disponíveis; classificação formal ainda não persistida no Match Center"
+                    ),
                 },
                 "news": {
                     "items": facts,
                     "status": "ENIGMA_ANALYSIS" if facts else ("DATA_AVAILABLE" if has_metrics else "BACKGROUND_ENRICHMENT_PENDING"),
-                    "reason": "fatos quantitativos gerados em background pela Enigma Core; não são notícias editoriais externas",
+                    "reason": "fatos quantitativos gerados pela Enigma Core; notícias pré-jogo Sportmonks, quando disponíveis, aparecem no bloco Contexto Sportmonks J1",
                 },
                 "data_quality": {
                     **quality,
@@ -267,6 +282,7 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
                     "provider_calls_during_dashboard_request": False,
                     "history_reconstruction_during_dashboard_request": False,
                     "enrichment_cache_generated_at": cached.get("cache_generated_at"),
+                    "prematch_provider_context_available": has_provider_context,
                     "xg_xga_informational_only": True,
                     "xg_xga_not_used_to_change_current_prediction": True,
                 },
@@ -289,6 +305,9 @@ def build_dashboard_match_center_v3(*, target_date: date | None = None) -> dict[
             "provider_calls_during_dashboard_refresh": False,
             "history_reconstruction_during_dashboard_refresh": False,
             "enrichment_is_background_materialized": True,
+            "j1_rich_provider_context_is_materialized": True,
+            "provider_predictions_are_informational_only": True,
+            "post_kickoff_provider_fields_excluded_from_j1_context": True,
             "xg_xga_are_informational_only": True,
             "confidence_strong_favorite_threshold": 0.55,
             "confidence_effective_favorite_threshold": 0.45,

@@ -21,6 +21,7 @@ from app.daily_prediction_runner_v2 import (
 )
 from app.j1_capacity import activate_j1_runner_capacity
 from app.j1_pending_selector_v2 import install_j1_pending_selector_v2
+from app.j1_rich_provider_context import install_j1_rich_provider_context
 from app.j1_work_queue import (
     DEFAULT_CLAIM_LEASE_SECONDS,
     DEFAULT_MAX_ATTEMPTS,
@@ -252,6 +253,7 @@ async def run_worker_loop() -> None:
     activate_j1_runner_capacity()
     install_j1_pending_selector_v2()
     install_prediction_window_policy()
+    install_j1_rich_provider_context()
 
     worker_id = _worker_id()
     poll_seconds = max(0.2, float(os.getenv("J1_WORKER_POLL_SECONDS", DEFAULT_POLL_SECONDS)))
@@ -284,6 +286,7 @@ async def run_worker_loop() -> None:
                 "lease_seconds": lease_seconds,
                 "poll_seconds": poll_seconds,
                 "max_attempts": max_attempts,
+                "rich_provider_context": True,
             }
         ),
         flush=True,
