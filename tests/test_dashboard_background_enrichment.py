@@ -14,13 +14,17 @@ class DashboardBackgroundEnrichmentTests(unittest.TestCase):
         self.assertIn('"history_reconstruction_during_dashboard_refresh": False', source)
         self.assertIn('"enrichment_is_background_materialized": True', source)
 
-    def test_runner_is_separate_and_bounded(self):
+    def test_runner_is_streaming_and_bounded(self):
         source = (ROOT / "app" / "dashboard_enrichment_runner.py").read_text()
-        self.assertIn("build_bulk_team_enrichment", source)
+        stream = (ROOT / "app" / "dashboard_j1_team_enrichment_stream.py").read_text()
+        self.assertIn("build_streaming_team_enrichment", source)
+        self.assertNotIn("build_bulk_team_enrichment", source)
         self.assertIn("backfill_missing_xg", source)
-        self.assertIn("XG_BACKFILL_LIMIT = 12", source)
-        self.assertIn("XG_BACKFILL_CONCURRENCY = 2", source)
-        self.assertIn('"separate_from_j1_runner": True', source)
+        self.assertIn("MAX_TARGET_FIXTURES = 20", source)
+        self.assertIn("XG_BACKFILL_LIMIT = 8", source)
+        self.assertIn("XG_BACKFILL_CONCURRENCY = 1", source)
+        self.assertIn("HISTORY_SCAN_LIMIT_PER_TEAM = 24", stream)
+        self.assertIn(".limit(HISTORY_SCAN_LIMIT_PER_TEAM)", stream)
         self.assertIn('"no_prediction_or_decision_writes": True', source)
 
     def test_existing_worker_runs_enrichment_only_when_idle(self):

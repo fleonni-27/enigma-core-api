@@ -8,18 +8,19 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from app.dashboard_enrichment_cache import persist_dashboard_enrichment
-from app.dashboard_j1_team_enrichment import build_bulk_team_enrichment
+from app.dashboard_j1_team_enrichment_stream import build_streaming_team_enrichment
 from app.database import SessionLocal
 from app.league_registry import canonical_league
 from app.models import Fixture
 from app.xg_historical_backfill import backfill_missing_xg
 
-RUNNER_VERSION = "dashboard_enrichment_runner_v1"
+RUNNER_VERSION = "dashboard_enrichment_runner_v2_stream"
 BUSINESS_TIMEZONE = "America/Sao_Paulo"
 TARGET_DAYS_AHEAD = 1
+MAX_TARGET_FIXTURES = 20
 XG_BACKFILL_DAYS = 180
-XG_BACKFILL_LIMIT = 12
-XG_BACKFILL_CONCURRENCY = 2
+XG_BACKFILL_LIMIT = 8
+XG_BACKFILL_CONCURRENCY = 1
 
 
 def _utc_window() -> tuple[datetime, datetime]:
@@ -37,6 +38,7 @@ def _target_items() -> list[dict]:
             select(Fixture)
             .where(Fixture.starts_at >= start_utc, Fixture.starts_at < end_utc)
             .order_by(Fixture.starts_at.asc(), Fixture.id.asc())
+            .limit(MAX_TARGET_FIXTURES * 3)
         ).all()
     items: list[dict] = []
     for fixture in rows:
@@ -53,12 +55,12 @@ def _target_items() -> list[dict]:
                 "starts_at": fixture.starts_at.isoformat(),
             }
         )
+        if len(items) >= MAX_TARGET_FIXTURES:
+            break
     return items
 
 
 def _should_run_provider_backfill(now: datetime) -> bool:
-    # Cron runs every 15 minutes. Provider recovery runs only once every 6 hours,
-    # keeping dashboard materialization frequent without hammering Sportmonks.
     return now.minute == 0 and now.hour % 6 == 0
 
 
@@ -85,7 +87,7 @@ async def run_background_enrichment() -> dict:
                 "isolated_from_dashboard_and_j1": True,
             }
 
-    enrichments = build_bulk_team_enrichment(items) if items else {}
+    enrichments = build_streaming_team_enrichment(items) if items else {}
     materialized: dict[int, dict] = {}
     for item in items:
         fixture_id = int(item["fixture_id"])
@@ -124,10 +126,10 @@ async def run_background_enrichment() -> dict:
             "error": provider_backfill.get("error"),
         },
         "policy": {
-            "separate_from_j1_runner": True,
             "dashboard_reads_cache_only": True,
+            "low_memory_streaming": True,
+            "max_target_fixtures": MAX_TARGET_FIXTURES,
             "provider_backfill_every_six_hours": True,
-            "materialization_every_fifteen_minutes": True,
             "no_prediction_or_decision_writes": True,
         },
     }
